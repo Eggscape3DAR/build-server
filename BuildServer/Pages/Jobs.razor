@@ -152,6 +152,12 @@
                                                 Delete
                                             </button>
                                         }
+                                        @if (job.Status == JobStatus.Running || job.Status == JobStatus.Failed || job.Status == JobStatus.Assigned)
+                                        {
+                                            <button class="btn btn-sm btn-warning" @onclick="() => CancelJob(job.JobId)">
+                                                Cancel
+                                            </button>
+                                        }
                                     </td>
                                 </tr>
                             }
@@ -762,6 +768,27 @@
             DB.Jobs.Remove(job);
             await DB.SaveChangesAsync();
             await LoadJobs();
+        }
+    }
+
+    private async Task CancelJob(string jobId)
+    {
+        try
+        {
+            var response = await Http.PostAsync($"/api/Jobs/{jobId}/cancel", null);
+            if (response.IsSuccessStatusCode)
+            {
+                await LoadJobs();
+            }
+            else
+            {
+                var error = await response.Content.ReadAsStringAsync();
+                Console.WriteLine($"Failed to cancel job: {error}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error cancelling job: {ex.Message}");
         }
     }
 

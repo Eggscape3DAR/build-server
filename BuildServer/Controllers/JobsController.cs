@@ -206,6 +206,43 @@ public class JobsController : ControllerBase
         return Ok(new { message = "Job marked as failed" });
     }
 
+    [HttpPost("{jobId}/cancel")]
+    public async Task<IActionResult> Cancel(string jobId)
+    {
+        var job = await _db.Jobs.FirstOrDefaultAsync(j => j.JobId == jobId);
+        if (job == null)
+            return NotFound();
+
+        // Only allow cancelling jobs that are Queued, Assigned, or Running
+        if (job.Status != JobStatus.Queued &&
+            job.Status != JobStatus.Assigned &&
+            job.Status != JobStatus.Running)
+        {
+            return BadRequest(new { message = $"Cannot cancel job with status: {job.Status}" });
+        }
+
+        job.Status = JobStatus.Cancelled;
+        job.CompletedAt = DateTime.UtcNow;
+        job.ErrorMessage = "Job cancelled by user";
+
+        // Mark agent as available if job was assigned
+        if (!string.IsNullOrEmpty(job.AssignedAgentId))
+        {
+            var agent = await _db.Agents.FirstOrDefaultAsync(a => a.AgentId == job.AssignedAgentId);
+            if (agent != null)
+            {
+                agent.IsAvailable = true;
+                agent.CurrentJobId = null;
+            }
+        }
+
+        await _db.SaveChangesAsync();
+
+        _logger.LogInformation("Job {JobId} cancelled by user", jobId);
+
+        return Ok(new { message = "Job cancelled successfully" });
+    }
+
     [HttpPost("{jobId}/restart")]
     public async Task<IActionResult> Restart(string jobId)
     {
