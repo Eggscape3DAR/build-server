@@ -64,6 +64,7 @@
                                 <th>Build Type</th>
                                 <th>Branch</th>
                                 <th>Commit</th>
+                                <th>Submitted</th>
                                 <th>Agent</th>
                                 <th>Status</th>
                                 <th>Progress</th>
@@ -88,6 +89,9 @@
                                         {
                                             <code title="@job.GitCommitMessage">@job.GitCommitHash.Substring(0, Math.Min(7, job.GitCommitHash.Length))</code>
                                         }
+                                    </td>
+                                    <td>
+                                        <small>@job.CreatedAt.ToString("g")</small>
                                     </td>
                                     <td>
                                         @if (!string.IsNullOrEmpty(job.AssignedAgentId))
