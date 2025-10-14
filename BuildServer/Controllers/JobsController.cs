@@ -206,6 +206,45 @@ public class JobsController : ControllerBase
         return Ok(new { message = "Job marked as failed" });
     }
 
+    [HttpPost("{jobId}/restart")]
+    public async Task<IActionResult> Restart(string jobId)
+    {
+        var originalJob = await _db.Jobs.FirstOrDefaultAsync(j => j.JobId == jobId);
+        if (originalJob == null)
+            return NotFound();
+
+        _logger.LogInformation("Restarting job {JobId}", jobId);
+
+        // Create a new job with the same parameters
+        var newJob = new Job
+        {
+            Name = originalJob.Name,
+            ProfileName = originalJob.ProfileName,
+            Platform = originalJob.Platform,
+            Channel = originalJob.Channel,
+            GitBranch = originalJob.GitBranch,
+            GitCommitHash = originalJob.GitCommitHash,
+            GitCommitMessage = originalJob.GitCommitMessage,
+            GitCommitAuthor = originalJob.GitCommitAuthor,
+            GitCommitDate = originalJob.GitCommitDate,
+            UploadToGoogleDrive = originalJob.UploadToGoogleDrive,
+            UploadToChannel = originalJob.UploadToChannel,
+            BuildType = originalJob.BuildType,
+            AppVersion = originalJob.AppVersion,
+            BundleCode = originalJob.BundleCode,
+            Status = JobStatus.Queued,
+            Progress = 0,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        _db.Jobs.Add(newJob);
+        await _db.SaveChangesAsync();
+
+        _logger.LogInformation("Job {OldJobId} restarted as {NewJobId}", jobId, newJob.JobId);
+
+        return Ok(new { jobId = newJob.JobId, message = "Job restarted successfully" });
+    }
+
     [HttpDelete("{jobId}")]
     public async Task<IActionResult> Delete(string jobId)
     {
