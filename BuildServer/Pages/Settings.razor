@@ -2,7 +2,9 @@
 @using Microsoft.EntityFrameworkCore
 @using BuildServer.Data
 @using BuildServer.Models
+@using BuildServer.Services
 @inject BuildServerContext DB
+@inject GitService GitService
 
 <PageTitle>Settings - Build Server</PageTitle>
 
@@ -195,12 +197,44 @@
                 return;
             }
 
-            _message = "Testing connection... (Not implemented yet - will test GitHub API access)";
+            _message = "Testing connection to GitHub...";
             _isError = false;
+            StateHasChanged();
+
+            // Save settings temporarily to test them
+            var existing = await DB.GlobalSettings.FirstOrDefaultAsync();
+            if (existing == null)
+            {
+                DB.GlobalSettings.Add(_settings);
+            }
+            else
+            {
+                existing.RepositoryUrl = _settings.RepositoryUrl;
+                existing.RepositoryOwner = _settings.RepositoryOwner;
+                existing.RepositoryName = _settings.RepositoryName;
+                existing.GitHubToken = _settings.GitHubToken;
+                existing.DefaultBranch = _settings.DefaultBranch;
+                existing.UpdatedAt = DateTime.UtcNow;
+            }
+            await DB.SaveChangesAsync();
+
+            // Test by fetching branches
+            var branches = await GitService.GetBranches();
+
+            if (branches.Any())
+            {
+                _message = $"✅ Connection successful! Found {branches.Count} branches in repository {_settings.RepositoryOwner}/{_settings.RepositoryName}";
+                _isError = false;
+            }
+            else
+            {
+                _message = "⚠️ Connected successfully but no branches found. Check repository settings.";
+                _isError = true;
+            }
         }
         catch (Exception ex)
         {
-            _message = $"Connection test failed: {ex.Message}";
+            _message = $"❌ Connection test failed: {ex.Message}";
             _isError = true;
         }
     }
