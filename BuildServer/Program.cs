@@ -38,11 +38,40 @@ builder.Services.AddSwaggerGen(c =>
 
 var app = builder.Build();
 
-// Apply database migrations
+// Apply database migrations with conflict resolution
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<BuildServerContext>();
-    db.Database.Migrate();
+    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+
+    try
+    {
+        logger.LogInformation("Applying database migrations...");
+        db.Database.Migrate();
+        logger.LogInformation("Database migrations applied successfully");
+    }
+    catch (Microsoft.Data.Sqlite.SqliteException ex) when (ex.Message.Contains("already exists"))
+    {
+        logger.LogWarning("Migration conflict detected - database was created without migrations tracking");
+        logger.LogWarning("Deleting old database and recreating with migrations...");
+
+        // Delete the old database
+        var dbPath = "/app/data/buildserver.db";
+        if (File.Exists(dbPath))
+        {
+            File.Delete(dbPath);
+            logger.LogInformation("Deleted old database file");
+        }
+
+        // Delete WAL and SHM files if they exist
+        if (File.Exists(dbPath + "-wal")) File.Delete(dbPath + "-wal");
+        if (File.Exists(dbPath + "-shm")) File.Delete(dbPath + "-shm");
+
+        // Retry migration
+        logger.LogInformation("Recreating database with migrations...");
+        db.Database.Migrate();
+        logger.LogInformation("Database recreated successfully with migrations");
+    }
 }
 
 // Configure HTTP pipeline
