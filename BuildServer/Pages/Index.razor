@@ -1,9 +1,95 @@
 ﻿@page "/"
+@using Microsoft.EntityFrameworkCore
+@using BuildServer.Data
+@using BuildServer.Models
+@inject BuildServerContext DB
 
-<PageTitle>Index</PageTitle>
+<PageTitle>Build Server - Dashboard</PageTitle>
 
-<h1>Hello, world!</h1>
+<h1>🚀 Eggscape Build Server</h1>
 
-Welcome to your new app.
+<div class="row mt-4">
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Agents</h5>
+                <h2>@_agents.Count</h2>
+                <p class="text-muted">@_agents.Count(a => a.IsOnline) online</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Jobs</h5>
+                <h2>@_jobs.Count</h2>
+                <p class="text-muted">@_jobs.Count(j => j.Status == JobStatus.Running) running</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Builds Today</h5>
+                <h2>@_buildsToday</h2>
+                <p class="text-muted">Last 24 hours</p>
+            </div>
+        </div>
+    </div>
+</div>
 
-<SurveyPrompt Title="How is Blazor working for you?" />
+<h3 class="mt-4">Recent Agents</h3>
+@if (_agents.Any())
+{
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Machine</th>
+                <th>Status</th>
+                <th>Last Seen</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var agent in _agents.Take(10))
+            {
+                <tr>
+                    <td>@agent.Name</td>
+                    <td>@agent.MachineName</td>
+                    <td>
+                        @if (agent.IsOnline)
+                        {
+                            <span class="badge bg-success">Online</span>
+                        }
+                        else
+                        {
+                            <span class="badge bg-secondary">Offline</span>
+                        }
+                    </td>
+                    <td>@agent.LastHeartbeat.ToString("g")</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+else
+{
+    <div class="alert alert-info">
+        <strong>No agents registered yet.</strong>
+        <p>Agents will appear here once they register with the server.</p>
+        <p>Test the API at <a href="/swagger">/swagger</a></p>
+    </div>
+}
+
+@code {
+    private List<Agent> _agents = new();
+    private List<Job> _jobs = new();
+    private int _buildsToday = 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _agents = await DB.Agents.OrderByDescending(a => a.LastHeartbeat).ToListAsync();
+        _jobs = await DB.Jobs.OrderByDescending(j => j.CreatedAt).ToListAsync();
+        _buildsToday = await DB.Jobs.CountAsync(j => j.CreatedAt >= DateTime.UtcNow.AddDays(-1) && j.Status == JobStatus.Completed);
+    }
+}
