@@ -51,7 +51,7 @@
 
                 <div class="mb-3">
                     <label class="form-label">Filter by Platform:</label>
-                    <select class="form-select" @bind="_selectedPlatform" @bind:after="FilterBuilds">
+                    <select class="form-select" value="@_selectedPlatform" @onchange="OnPlatformChanged">
                         <option value="">All Platforms</option>
                         <option value="Android">Android</option>
                         <option value="iOS">iOS</option>
@@ -59,7 +59,6 @@
                         <option value="WebGL">WebGL</option>
                     </select>
                 </div>
-
                 @if (_filteredJobs.Any())
                 {
                     <table class="table table-striped">
@@ -186,6 +185,12 @@
             .Where(j => j.Status == JobStatus.Completed || j.Status == JobStatus.Failed)
             .OrderByDescending(j => j.CompletedAt)
             .ToListAsync();
+    }
+
+    private void OnPlatformChanged(ChangeEventArgs e)
+    {
+        _selectedPlatform = e.Value?.ToString() ?? "";
+        FilterBuilds();
     }
 
     private void FilterBuilds()

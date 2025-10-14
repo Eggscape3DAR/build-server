@@ -38,11 +38,11 @@ builder.Services.AddSwaggerGen(c =>
 
 var app = builder.Build();
 
-// Create database if not exists
+// Apply database migrations
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<BuildServerContext>();
-    db.Database.EnsureCreated();
+    db.Database.Migrate();
 }
 
 // Configure HTTP pipeline

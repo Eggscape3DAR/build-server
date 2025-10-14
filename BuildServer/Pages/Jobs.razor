@@ -201,7 +201,7 @@
                             <div class="mb-3">
                                 <label class="form-label">Branch</label>
                                 <div class="input-group">
-                                    <select class="form-select" @bind="_selectedBranch" @bind:after="OnBranchChanged">
+                                    <select class="form-select" value="@_selectedBranch" @onchange="OnBranchChangedEvent">
                                         <option value="">Select branch...</option>
                                         @foreach (var branch in _branches)
                                         {
@@ -444,6 +444,12 @@
         {
             Console.WriteLine($"Error loading branches: {ex.Message}");
         }
+    }
+
+    private async Task OnBranchChangedEvent(ChangeEventArgs e)
+    {
+        _selectedBranch = e.Value?.ToString() ?? "";
+        await OnBranchChanged();
     }
 
     private async Task OnBranchChanged()
