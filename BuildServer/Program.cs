@@ -55,7 +55,12 @@ using (var scope = app.Services.CreateScope())
         logger.LogWarning("Migration conflict detected - database was created without migrations tracking");
         logger.LogWarning("Deleting old database and recreating with migrations...");
 
-        // Delete the old database
+        // Close and dispose the current database connection
+        logger.LogInformation("Closing existing database connection...");
+        db.Database.CloseConnection();
+        scope.Dispose();
+
+        // Delete the old database files
         var dbPath = "/app/data/buildserver.db";
         if (File.Exists(dbPath))
         {
@@ -64,12 +69,28 @@ using (var scope = app.Services.CreateScope())
         }
 
         // Delete WAL and SHM files if they exist
-        if (File.Exists(dbPath + "-wal")) File.Delete(dbPath + "-wal");
-        if (File.Exists(dbPath + "-shm")) File.Delete(dbPath + "-shm");
+        if (File.Exists(dbPath + "-wal"))
+        {
+            File.Delete(dbPath + "-wal");
+            logger.LogInformation("Deleted WAL file");
+        }
+        if (File.Exists(dbPath + "-shm"))
+        {
+            File.Delete(dbPath + "-shm");
+            logger.LogInformation("Deleted SHM file");
+        }
 
-        // Retry migration
-        logger.LogInformation("Recreating database with migrations...");
-        db.Database.Migrate();
+        // Small delay to ensure files are fully released
+        System.Threading.Thread.Sleep(100);
+
+        // Create a completely new scope and context for clean migration
+        logger.LogInformation("Creating fresh database context...");
+        using var newScope = app.Services.CreateScope();
+        var newDb = newScope.ServiceProvider.GetRequiredService<BuildServerContext>();
+
+        // Retry migration with fresh context
+        logger.LogInformation("Applying migrations to new database...");
+        newDb.Database.Migrate();
         logger.LogInformation("Database recreated successfully with migrations");
     }
 }
