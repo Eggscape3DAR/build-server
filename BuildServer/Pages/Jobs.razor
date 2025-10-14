@@ -59,8 +59,8 @@
                         <thead>
                             <tr>
                                 <th>Name</th>
-                                <th>Profile</th>
                                 <th>Platform</th>
+                                <th>Build Type</th>
                                 <th>Branch</th>
                                 <th>Commit</th>
                                 <th>Status</th>
@@ -73,8 +73,8 @@
                             {
                                 <tr>
                                     <td><strong>@job.Name</strong></td>
-                                    <td><small>@job.ProfileName</small></td>
                                     <td><small>@job.Platform</small></td>
+                                    <td><span class="badge bg-info">@job.BuildType</span></td>
                                     <td>
                                         @if (!string.IsNullOrEmpty(job.GitBranch))
                                         {
@@ -159,38 +159,16 @@
                             <div class="mb-3">
                                 <label class="form-label">Job Name</label>
                                 <input type="text" class="form-control" @bind="_newJob.Name"
-                                       placeholder="Android Dev Build" />
-                            </div>
-
-                            <div class="mb-3">
-                                <label class="form-label">Profile</label>
-                                <select class="form-select" @bind="_newJob.ProfileName">
-                                    <option value="">Select profile...</option>
-                                    <option value="Android Dev APK">Android Dev APK</option>
-                                    <option value="Android Production APK">Android Production APK</option>
-                                    <option value="Android AAB">Android AAB</option>
-                                    <option value="iOS Development">iOS Development</option>
-                                    <option value="iOS AppStore">iOS AppStore</option>
-                                </select>
+                                       placeholder="Commit message - Author" />
+                                <small class="form-text text-muted">Auto-filled from selected commit</small>
                             </div>
 
                             <div class="mb-3">
                                 <label class="form-label">Platform</label>
                                 <select class="form-select" @bind="_newJob.Platform">
-                                    <option value="">Select platform...</option>
+                                    <option value="Meta">Meta</option>
                                     <option value="Android">Android</option>
-                                    <option value="iOS">iOS</option>
                                     <option value="Windows">Windows</option>
-                                </select>
-                            </div>
-
-                            <div class="mb-3">
-                                <label class="form-label">Channel</label>
-                                <select class="form-select" @bind="_newJob.Channel">
-                                    <option value="">Select channel...</option>
-                                    <option value="Development">Development</option>
-                                    <option value="Staging">Staging</option>
-                                    <option value="Production">Production</option>
                                 </select>
                             </div>
 
@@ -223,7 +201,7 @@
                                 <div class="form-check">
                                     <input class="form-check-input" type="radio" name="buildType" id="levelBuilder"
                                            checked="@(_newJob.BuildType == "LevelBuilder")"
-                                           @onclick="@(() => _newJob.BuildType = "LevelBuilder")" />
+                                           @onclick="@(async () => await OnBuildTypeChanged("LevelBuilder"))" />
                                     <label class="form-check-label" for="levelBuilder">
                                         Level Builder
                                     </label>
@@ -231,23 +209,56 @@
                                 <div class="form-check">
                                     <input class="form-check-input" type="radio" name="buildType" id="earlyAccess"
                                            checked="@(_newJob.BuildType == "EarlyAccess")"
-                                           @onclick="@(() => _newJob.BuildType = "EarlyAccess")" />
+                                           @onclick="@(async () => await OnBuildTypeChanged("EarlyAccess"))" />
                                     <label class="form-check-label" for="earlyAccess">
                                         Early Access
                                     </label>
                                 </div>
                             </div>
 
-                            <div class="mb-3">
-                                <label class="form-label">App Version</label>
-                                <div class="input-group">
-                                    <input type="text" class="form-control" @bind="_newJob.AppVersion" placeholder="1.0.0" />
-                                    <button class="btn btn-outline-secondary" type="button" @onclick="IncrementVersion">
-                                        🔼 Auto-Increment
-                                    </button>
+                            @if (_loadingBundleCode)
+                            {
+                                <div class="alert alert-info">Loading bundle code...</div>
+                            }
+                            else
+                            {
+                                <div class="mb-3">
+                                    <label class="form-label">Current Bundle Code from Portal Server</label>
+                                    <div class="alert alert-secondary">
+                                        <strong>Current:</strong> @_currentBundleCode
+                                    </div>
                                 </div>
-                                <small class="form-text text-muted">Current: @_newJob.AppVersion (Code: @_newJob.BundleCode)</small>
-                            </div>
+
+                                <div class="mb-3">
+                                    <label class="form-label">Bundle Code for this Build</label>
+                                    <div class="input-group">
+                                        <input type="number" class="form-control" @bind="_newJob.BundleCode"
+                                               readonly="@_autoIncrementBundleCode" />
+                                        <div class="input-group-text">
+                                            <input class="form-check-input mt-0" type="checkbox" @bind="_autoIncrementBundleCode"
+                                                   @onclick="OnAutoIncrementChanged" id="autoIncrement" />
+                                            <label class="form-check-label ms-2" for="autoIncrement">
+                                                Auto-increment
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <small class="form-text text-muted">
+                                        @if (_autoIncrementBundleCode)
+                                        {
+                                            <span>Auto-incremented to @_newJob.BundleCode (Current + 1)</span>
+                                        }
+                                        else
+                                        {
+                                            <span>Manually set bundle code</span>
+                                        }
+                                    </small>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label class="form-label">App Version</label>
+                                    <input type="text" class="form-control" @bind="_newJob.AppVersion" placeholder="1.0.0" />
+                                </div>
+                            }
                         </div>
 
                         <div class="col-md-6">
@@ -431,6 +442,9 @@
     private CommitDto? _selectedCommitInfo;
     private string _defaultBranch = "development";
     private bool _loadingCommits = false;
+    private bool _loadingBundleCode = false;
+    private int _currentBundleCode = 0;
+    private bool _autoIncrementBundleCode = true;
 
     private bool _showCreateModal = false;
     private bool _showDetailsModal = false;
@@ -464,9 +478,11 @@
         _selectedCommit = "";
         _selectedCommitInfo = null;
         _commits.Clear();
+        _autoIncrementBundleCode = true;
 
         _showCreateModal = true;
         await LoadBranches();
+        await LoadCurrentBundleCode(); // Load initial bundle code
 
         if (!string.IsNullOrEmpty(_defaultBranch))
         {
@@ -539,14 +555,57 @@
     {
         _selectedCommit = commit.Sha;
         _selectedCommitInfo = commit;
+
+        // Auto-fill job name with commit message and author
+        _newJob.Name = $"{commit.Message} - {commit.Author}";
+    }
+
+    private async Task OnBuildTypeChanged(string buildType)
+    {
+        _newJob.BuildType = buildType;
+        await LoadCurrentBundleCode();
+    }
+
+    private async Task LoadCurrentBundleCode()
+    {
+        _loadingBundleCode = true;
+        try
+        {
+            var response = await Http.GetFromJsonAsync<BundleCodeResponse>($"/api/version/latest?buildType={_newJob.BuildType}");
+            if (response != null)
+            {
+                _currentBundleCode = response.bundleCode;
+
+                if (_autoIncrementBundleCode)
+                {
+                    _newJob.BundleCode = _currentBundleCode + 1;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading bundle code: {ex.Message}");
+            _currentBundleCode = 0;
+            _newJob.BundleCode = 1;
+        }
+        finally
+        {
+            _loadingBundleCode = false;
+        }
+    }
+
+    private void OnAutoIncrementChanged()
+    {
+        if (_autoIncrementBundleCode)
+        {
+            _newJob.BundleCode = _currentBundleCode + 1;
+        }
     }
 
     private bool CanCreateJob()
     {
         return !string.IsNullOrEmpty(_newJob.Name) &&
-               !string.IsNullOrEmpty(_newJob.ProfileName) &&
                !string.IsNullOrEmpty(_newJob.Platform) &&
-               !string.IsNullOrEmpty(_newJob.Channel) &&
                !string.IsNullOrEmpty(_selectedBranch) &&
                !string.IsNullOrEmpty(_selectedCommit);
     }
@@ -558,9 +617,9 @@
         var job = new Job
         {
             Name = _newJob.Name,
-            ProfileName = _newJob.ProfileName,
+            ProfileName = _newJob.Platform, // Use platform as profile
             Platform = _newJob.Platform,
-            Channel = _newJob.Channel,
+            Channel = _newJob.BuildType, // Build Type is the channel now
             GitBranch = _selectedBranch,
             GitCommitHash = _selectedCommitInfo?.Sha ?? _selectedCommit,
             GitCommitMessage = _selectedCommitInfo?.Message ?? "",
@@ -606,39 +665,18 @@
         }
     }
 
-    private async Task IncrementVersion()
-    {
-        try
-        {
-            var buildType = _newJob.BuildType;
-            var response = await Http.GetFromJsonAsync<VersionResponse>($"/api/version/next?buildType={buildType}");
-
-            if (response != null)
-            {
-                _newJob.AppVersion = response.version;
-                _newJob.BundleCode = response.bundleCode;
-            }
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error incrementing version: {ex.Message}");
-        }
-    }
-
-    private class VersionResponse
+    private class BundleCodeResponse
     {
         public string version { get; set; } = "";
         public int bundleCode { get; set; }
-        public string previousVersion { get; set; } = "";
-        public int previousBundleCode { get; set; }
+        public string channelId { get; set; } = "";
+        public string buildType { get; set; } = "";
     }
 
     private class CreateJobDto
     {
         public string Name { get; set; } = "";
-        public string ProfileName { get; set; } = "";
-        public string Platform { get; set; } = "";
-        public string Channel { get; set; } = "";
+        public string Platform { get; set; } = "Meta";
         public bool UploadToGoogleDrive { get; set; } = true;
         public bool UploadToChannel { get; set; } = false;
         public string BuildType { get; set; } = "LevelBuilder";
