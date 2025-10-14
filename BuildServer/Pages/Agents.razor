@@ -5,9 +5,10 @@
 @inject BuildServerContext DB
 @inject NavigationManager Navigation
 
-<PageTitle>Agents - Build Server</PageTitle>
+<PageTitle>Agents - Eggscape Build Server</PageTitle>
 
 <h1>🖥️ Build Agents</h1>
+<p class="text-muted">🥚 Manage your egg-cellent build machines 🥚</p>
 
 <div class="row mt-4">
     <div class="col-12">
@@ -20,6 +21,7 @@
                     <table class="table table-hover">
                         <thead>
                             <tr>
+                                <th>Priority</th>
                                 <th>Name</th>
                                 <th>Machine</th>
                                 <th>Status</th>
@@ -33,7 +35,18 @@
                         <tbody>
                             @foreach (var agent in _agents)
                             {
+                                var config = _agentConfigs.FirstOrDefault(c => c.AgentId == agent.AgentId);
                                 <tr>
+                                    <td>
+                                        @if (config != null)
+                                        {
+                                            <span class="badge bg-info">#@config.Priority</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">-</span>
+                                        }
+                                    </td>
                                     <td><strong>@agent.Name</strong></td>
                                     <td>
                                         <div>@agent.MachineName</div>
@@ -123,43 +136,16 @@
                 <div class="modal-body">
                     <form>
                         <div class="mb-3">
-                            <label class="form-label">Unity Project Path</label>
-                            <input type="text" class="form-control" @bind="_config.UnityProjectPath"
-                                   placeholder="C:/Projects/Eggscape" />
-                            <small class="form-text text-muted">Path to the Unity project directory</small>
+                            <label class="form-label"><strong>Build Output Folder</strong></label>
+                            <input type="text" class="form-control" @bind="_config.BuildOutputFolder"
+                                   placeholder="C:\Users\YourName\Documents\EggscapeBuilds" />
+                            <small class="form-text text-muted">📁 Directory where build outputs will be stored (e.g., APK, OBB files)</small>
                         </div>
 
                         <div class="mb-3">
-                            <label class="form-label">Repository URL</label>
-                            <input type="text" class="form-control" @bind="_config.RepositoryUrl"
-                                   placeholder="https://github.com/YourOrg/YourRepo.git" />
-                        </div>
-
-                        <div class="mb-3">
-                            <label class="form-label">Git Username</label>
-                            <input type="text" class="form-control" @bind="_config.GitUsername"
-                                   placeholder="username" />
-                        </div>
-
-                        <div class="mb-3">
-                            <label class="form-label">Git Token / Password</label>
-                            <input type="password" class="form-control" @bind="_config.GitToken"
-                                   placeholder="ghp_..." />
-                            <small class="form-text text-muted">Personal access token or password</small>
-                        </div>
-
-                        <div class="mb-3">
-                            <label class="form-label">Workspace Path</label>
-                            <input type="text" class="form-control" @bind="_config.WorkspacePath"
-                                   placeholder="C:/BuildWorkspace" />
-                            <small class="form-text text-muted">Directory where builds will be executed</small>
-                        </div>
-
-                        <div class="mb-3">
-                            <label class="form-label">Artifacts Path</label>
-                            <input type="text" class="form-control" @bind="_config.ArtifactsPath"
-                                   placeholder="C:/BuildArtifacts" />
-                            <small class="form-text text-muted">Directory where build outputs will be stored</small>
+                            <label class="form-label"><strong>Priority</strong></label>
+                            <input type="number" class="form-control" @bind="_config.Priority" min="0" max="100" />
+                            <small class="form-text text-muted">⚡ Build order priority. Lower number = higher priority (0 is highest, 10 is default)</small>
                         </div>
                     </form>
                 </div>
@@ -174,6 +160,7 @@
 
 @code {
     private List<Agent> _agents = new();
+    private List<AgentConfiguration> _agentConfigs = new();
     private bool _showConfigModal = false;
     private string? _selectedAgentId;
     private AgentConfigDto _config = new();
@@ -188,6 +175,19 @@
         _agents = await DB.Agents
             .OrderByDescending(a => a.LastHeartbeat)
             .ToListAsync();
+
+        _agentConfigs = await DB.AgentConfigurations.ToListAsync();
+
+        // Sort agents by priority (lower number = higher priority, show first)
+        _agents = _agents
+            .OrderBy(a =>
+            {
+                var config = _agentConfigs.FirstOrDefault(c => c.AgentId == a.AgentId);
+                return config?.Priority ?? 999; // Unconfigured agents go to the end
+            })
+            .ThenByDescending(a => a.IsOnline)
+            .ThenByDescending(a => a.IsAvailable)
+            .ToList();
     }
 
     private async Task ShowConfigModal(string agentId)
@@ -202,17 +202,13 @@
         {
             _config = new AgentConfigDto
             {
-                UnityProjectPath = existingConfig.UnityProjectPath,
-                RepositoryUrl = existingConfig.RepositoryUrl,
-                GitUsername = existingConfig.GitUsername,
-                GitToken = existingConfig.GitToken,
-                WorkspacePath = existingConfig.WorkspacePath,
-                ArtifactsPath = existingConfig.ArtifactsPath
+                BuildOutputFolder = existingConfig.BuildOutputFolder,
+                Priority = existingConfig.Priority
             };
         }
         else
         {
-            _config = new AgentConfigDto();
+            _config = new AgentConfigDto { Priority = 10 }; // Default priority
         }
 
         _showConfigModal = true;
@@ -242,12 +238,8 @@
             DB.AgentConfigurations.Add(config);
         }
 
-        config.UnityProjectPath = _config.UnityProjectPath ?? "";
-        config.RepositoryUrl = _config.RepositoryUrl ?? "";
-        config.GitUsername = _config.GitUsername ?? "";
-        config.GitToken = _config.GitToken ?? "";
-        config.WorkspacePath = _config.WorkspacePath ?? "";
-        config.ArtifactsPath = _config.ArtifactsPath ?? "";
+        config.BuildOutputFolder = _config.BuildOutputFolder ?? "";
+        config.Priority = _config.Priority;
         config.UpdatedAt = DateTime.UtcNow;
 
         await DB.SaveChangesAsync();
@@ -274,11 +266,7 @@
 
     private class AgentConfigDto
     {
-        public string? UnityProjectPath { get; set; }
-        public string? RepositoryUrl { get; set; }
-        public string? GitUsername { get; set; }
-        public string? GitToken { get; set; }
-        public string? WorkspacePath { get; set; }
-        public string? ArtifactsPath { get; set; }
+        public string? BuildOutputFolder { get; set; }
+        public int Priority { get; set; } = 10;
     }
 }

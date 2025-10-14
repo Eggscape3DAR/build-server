@@ -6,9 +6,46 @@
 @inject BuildServerContext DB
 @inject GitService GitService
 
-<PageTitle>Settings - Build Server</PageTitle>
+<PageTitle>Settings - Eggscape Build Server</PageTitle>
 
-<h1>⚙️ Settings</h1>
+@if (!_isAuthenticated)
+{
+    <div class="container" style="max-width: 400px; margin-top: 100px;">
+        <div class="card">
+            <div class="card-body text-center">
+                <h3>🔒 Protected Settings</h3>
+                <p class="text-muted">Enter password to access settings</p>
+
+                <form @onsubmit="CheckPassword">
+                    <div class="mb-3">
+                        <input type="password" class="form-control" @bind="_passwordInput"
+                               placeholder="Enter password" autofocus />
+                    </div>
+
+                    @if (!string.IsNullOrEmpty(_authError))
+                    {
+                        <div class="alert alert-danger">
+                            ❌ @_authError
+                        </div>
+                    }
+
+                    <button type="submit" class="btn btn-primary w-100">
+                        🔓 Unlock Settings
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+}
+else
+{
+    <div class="d-flex justify-content-between align-items-center">
+        <h1>⚙️ Settings</h1>
+        <button class="btn btn-outline-secondary btn-sm" @onclick="Logout">
+            🔒 Lock Settings
+        </button>
+    </div>
+    <p class="text-muted">🥚 Configure your Eggscape Build Server 🥚</p>
 
 <div class="row mt-4">
     <div class="col-12">
@@ -171,7 +208,14 @@
     </div>
 </div>
 
+}
+
 @code {
+    private const string SETTINGS_PASSWORD = "modopatapim";
+    private bool _isAuthenticated = false;
+    private string _passwordInput = "";
+    private string _authError = "";
+
     private GlobalSettings _settings = new();
     private string _message = "";
     private bool _isError = false;
@@ -183,8 +227,33 @@
 
     protected override async Task OnInitializedAsync()
     {
-        await LoadSettings();
-        await LoadStats();
+        if (_isAuthenticated)
+        {
+            await LoadSettings();
+            await LoadStats();
+        }
+    }
+
+    private void CheckPassword()
+    {
+        if (_passwordInput == SETTINGS_PASSWORD)
+        {
+            _isAuthenticated = true;
+            _authError = "";
+            _ = OnInitializedAsync(); // Load settings after authentication
+        }
+        else
+        {
+            _authError = "Incorrect password. Please try again.";
+            _passwordInput = "";
+        }
+    }
+
+    private void Logout()
+    {
+        _isAuthenticated = false;
+        _passwordInput = "";
+        _authError = "";
     }
 
     private async Task LoadSettings()

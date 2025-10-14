@@ -6,33 +6,40 @@
 
 <PageTitle>Build Server - Dashboard</PageTitle>
 
-<h1>🚀 Eggscape Build Server</h1>
+<div class="d-flex justify-content-between align-items-center">
+    <h1>🥚 Eggscape Build Server</h1>
+    <a href="/installer/download" class="btn btn-success btn-lg">
+        <span style="font-size: 1.5em;">🥚</span> Download Build Agent Installer
+    </a>
+</div>
+
+<p class="text-muted">🐣 Hatching builds since 2025 🐣</p>
 
 <div class="row mt-4">
     <div class="col-md-4">
-        <div class="card">
+        <div class="card border-primary">
             <div class="card-body">
-                <h5 class="card-title">Agents</h5>
+                <h5 class="card-title">🖥️ Build Agents</h5>
                 <h2>@_agents.Count</h2>
-                <p class="text-muted">@_agents.Count(a => a.IsOnline) online</p>
+                <p class="text-muted">🟢 @_agents.Count(a => a.IsOnline) online</p>
             </div>
         </div>
     </div>
     <div class="col-md-4">
-        <div class="card">
+        <div class="card border-warning">
             <div class="card-body">
-                <h5 class="card-title">Jobs</h5>
+                <h5 class="card-title">📦 Build Jobs</h5>
                 <h2>@_jobs.Count</h2>
-                <p class="text-muted">@_jobs.Count(j => j.Status == JobStatus.Running) running</p>
+                <p class="text-muted">▶️ @_jobs.Count(j => j.Status == JobStatus.Running) running</p>
             </div>
         </div>
     </div>
     <div class="col-md-4">
-        <div class="card">
+        <div class="card border-success">
             <div class="card-body">
-                <h5 class="card-title">Builds Today</h5>
+                <h5 class="card-title">🐣 Builds Hatched Today</h5>
                 <h2>@_buildsToday</h2>
-                <p class="text-muted">Last 24 hours</p>
+                <p class="text-muted">⏰ Last 24 hours</p>
             </div>
         </div>
     </div>

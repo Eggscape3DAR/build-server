@@ -26,6 +26,7 @@ public class Job
     public JobStatus Status { get; set; } = JobStatus.Queued;
     public float Progress { get; set; }
     public string? AssignedAgentId { get; set; }
+    public bool AutoAssign { get; set; } = true; // Auto-assign to next available agent
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? StartedAt { get; set; }
     public DateTime? CompletedAt { get; set; }

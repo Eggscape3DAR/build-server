@@ -8,9 +8,10 @@
 @inject HttpClient Http
 @inject IConfiguration Config
 
-<PageTitle>Jobs - Build Server</PageTitle>
+<PageTitle>Jobs - Eggscape Build Server</PageTitle>
 
 <h1>📦 Build Jobs</h1>
+<p class="text-muted">🐣 Queue and hatch your Eggscape builds 🐣</p>
 
 <div class="row mt-4">
     <div class="col-12">
@@ -258,6 +259,38 @@
                                     <label class="form-label">App Version</label>
                                     <input type="text" class="form-control" @bind="_newJob.AppVersion" placeholder="1.0.0" />
                                 </div>
+
+                                <hr />
+                                <h6>Agent Assignment</h6>
+
+                                <div class="mb-3">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" @bind="_newJob.AutoAssign" id="autoAssign" />
+                                        <label class="form-check-label" for="autoAssign">
+                                            <strong>Auto-assign to next available agent</strong>
+                                        </label>
+                                    </div>
+                                    <small class="form-text text-muted">
+                                        ✅ Recommended: Automatically assigns to the highest priority available agent
+                                    </small>
+                                </div>
+
+                                @if (!_newJob.AutoAssign)
+                                {
+                                    <div class="mb-3">
+                                        <label class="form-label">Manually Select Agent</label>
+                                        <select class="form-select" @bind="_newJob.ManualAgentId">
+                                            <option value="">-- No agent assigned (queued) --</option>
+                                            @foreach (var agent in _availableAgents)
+                                            {
+                                                <option value="@agent.AgentId">@agent.Name (@agent.MachineName)</option>
+                                            }
+                                        </select>
+                                        <small class="form-text text-muted">
+                                            Leave blank to queue without assignment
+                                        </small>
+                                    </div>
+                                }
                             }
                         </div>
 
@@ -435,6 +468,7 @@
 
 @code {
     private List<Job> _jobs = new();
+    private List<Agent> _availableAgents = new();
     private List<BranchDto> _branches = new();
     private List<CommitDto> _commits = new();
     private string _selectedBranch = "";
@@ -473,12 +507,18 @@
 
     private async Task ShowCreateModal()
     {
-        _newJob = new CreateJobDto();
+        _newJob = new CreateJobDto { AutoAssign = true };
         _selectedBranch = _defaultBranch;
         _selectedCommit = "";
         _selectedCommitInfo = null;
         _commits.Clear();
         _autoIncrementBundleCode = true;
+
+        // Load available agents
+        _availableAgents = await DB.Agents
+            .Where(a => a.IsOnline)
+            .OrderByDescending(a => a.IsAvailable)
+            .ToListAsync();
 
         _showCreateModal = true;
         await LoadBranches();
@@ -630,6 +670,8 @@
             BuildType = _newJob.BuildType,
             AppVersion = _newJob.AppVersion,
             BundleCode = _newJob.BundleCode,
+            AutoAssign = _newJob.AutoAssign,
+            AssignedAgentId = _newJob.AutoAssign ? null : _newJob.ManualAgentId,
             Status = JobStatus.Queued,
             Progress = 0,
             CreatedAt = DateTime.UtcNow
@@ -682,6 +724,8 @@
         public string BuildType { get; set; } = "LevelBuilder";
         public string AppVersion { get; set; } = "1.0.0";
         public int BundleCode { get; set; } = 1;
+        public bool AutoAssign { get; set; } = true;
+        public string? ManualAgentId { get; set; }
     }
 
     private class BranchDto
