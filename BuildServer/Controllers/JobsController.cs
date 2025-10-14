@@ -35,6 +35,11 @@ public class JobsController : ControllerBase
             GitCommitMessage = request.GitCommitMessage ?? "",
             GitCommitAuthor = request.GitCommitAuthor ?? "",
             GitCommitDate = request.GitCommitDate,
+            UploadToGoogleDrive = request.UploadToGoogleDrive,
+            UploadToChannel = request.UploadToChannel,
+            BuildType = request.BuildType,
+            AppVersion = request.AppVersion,
+            BundleCode = request.BundleCode,
             Status = JobStatus.Queued,
             Progress = 0,
             CreatedAt = DateTime.UtcNow
@@ -224,7 +229,12 @@ public record CreateJobRequest(
     string? GitCommitHash,
     string? GitCommitMessage,
     string? GitCommitAuthor,
-    DateTime? GitCommitDate
+    DateTime? GitCommitDate,
+    bool UploadToGoogleDrive = true,
+    bool UploadToChannel = false,
+    string BuildType = "LevelBuilder",
+    string AppVersion = "1.0.0",
+    int BundleCode = 1
 );
 public record UpdateProgressRequest(float Progress);
 public record CompleteJobRequest(string? BuildPath);

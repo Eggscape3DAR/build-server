@@ -16,6 +16,13 @@ public class Job
     public string GitCommitAuthor { get; set; } = string.Empty;
     public DateTime? GitCommitDate { get; set; }
 
+    // Build options
+    public bool UploadToGoogleDrive { get; set; } = true;
+    public bool UploadToChannel { get; set; } = false;
+    public string BuildType { get; set; } = "LevelBuilder"; // LevelBuilder or EarlyAccess
+    public string AppVersion { get; set; } = "1.0.0";
+    public int BundleCode { get; set; } = 1;
+
     public JobStatus Status { get; set; } = JobStatus.Queued;
     public float Progress { get; set; }
     public string? AssignedAgentId { get; set; }
