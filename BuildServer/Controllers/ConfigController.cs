@@ -49,12 +49,8 @@ public class ConfigController : ControllerBase
             _db.AgentConfigurations.Add(config);
         }
 
-        config.UnityProjectPath = request.UnityProjectPath ?? config.UnityProjectPath;
-        config.GitUsername = request.GitUsername ?? config.GitUsername;
-        config.GitToken = request.GitToken ?? config.GitToken; // TODO: Encrypt!
-        config.RepositoryUrl = request.RepositoryUrl ?? config.RepositoryUrl;
-        config.WorkspacePath = request.WorkspacePath ?? config.WorkspacePath;
-        config.ArtifactsPath = request.ArtifactsPath ?? config.ArtifactsPath;
+        config.BuildOutputFolder = request.BuildOutputFolder ?? config.BuildOutputFolder;
+        config.Priority = request.Priority ?? config.Priority;
         config.UpdatedAt = DateTime.UtcNow;
 
         await _db.SaveChangesAsync();
@@ -77,12 +73,8 @@ public class ConfigController : ControllerBase
             return NotFound(new { message = "Configuration not found" });
         }
 
-        config.UnityProjectPath = request.UnityProjectPath;
-        config.GitUsername = request.GitUsername;
-        config.GitToken = request.GitToken; // TODO: Encrypt!
-        config.RepositoryUrl = request.RepositoryUrl;
-        config.WorkspacePath = request.WorkspacePath;
-        config.ArtifactsPath = request.ArtifactsPath;
+        config.BuildOutputFolder = request.BuildOutputFolder;
+        config.Priority = request.Priority;
         config.UpdatedAt = DateTime.UtcNow;
 
         await _db.SaveChangesAsync();
@@ -134,19 +126,11 @@ public class ConfigController : ControllerBase
 }
 
 public record SaveConfigRequest(
-    string? UnityProjectPath,
-    string? GitUsername,
-    string? GitToken,
-    string? RepositoryUrl,
-    string? WorkspacePath,
-    string? ArtifactsPath
+    string? BuildOutputFolder,
+    int? Priority
 );
 
 public record UpdateConfigRequest(
-    string UnityProjectPath,
-    string GitUsername,
-    string GitToken,
-    string RepositoryUrl,
-    string WorkspacePath,
-    string ArtifactsPath
+    string BuildOutputFolder,
+    int Priority
 );
