@@ -128,14 +128,40 @@ public class JobsController : ControllerBase
         job.Progress = 1.0f;
         job.CompletedAt = DateTime.UtcNow;
 
-        // Mark agent as available
-        if (!string.IsNullOrEmpty(job.AssignedAgentId))
+        // Update agent performance metrics
+        if (!string.IsNullOrEmpty(job.AssignedAgentId) && job.StartedAt.HasValue && job.CompletedAt.HasValue)
         {
             var agent = await _db.Agents.FirstOrDefaultAsync(a => a.AgentId == job.AssignedAgentId);
             if (agent != null)
             {
                 agent.IsAvailable = true;
                 agent.CurrentJobId = null;
+
+                // Calculate build duration
+                var buildDuration = (int)(job.CompletedAt.Value - job.StartedAt.Value).TotalSeconds;
+                agent.LastBuildDurationSeconds = buildDuration;
+                agent.TotalBuildsCompleted++;
+
+                // Calculate average of last 5 builds
+                var recentBuilds = await _db.Jobs
+                    .Where(j => j.AssignedAgentId == job.AssignedAgentId &&
+                                j.Status == JobStatus.Completed &&
+                                j.StartedAt.HasValue &&
+                                j.CompletedAt.HasValue)
+                    .OrderByDescending(j => j.CompletedAt)
+                    .Take(5)
+                    .ToListAsync();
+
+                if (recentBuilds.Any())
+                {
+                    var avgDuration = recentBuilds
+                        .Select(j => (int)(j.CompletedAt!.Value - j.StartedAt!.Value).TotalSeconds)
+                        .Average();
+                    agent.AverageBuildDurationSeconds = (int)avgDuration;
+                }
+
+                _logger.LogInformation("Agent {AgentId} performance updated: Last={LastDuration}s, Avg={AvgDuration}s, Total={Total}",
+                    agent.AgentId, agent.LastBuildDurationSeconds, agent.AverageBuildDurationSeconds, agent.TotalBuildsCompleted);
             }
         }
 

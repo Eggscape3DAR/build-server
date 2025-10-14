@@ -12,4 +12,9 @@ public class Agent
     public DateTime LastHeartbeat { get; set; }
     public string? CurrentJobId { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+    // Performance metrics
+    public int? LastBuildDurationSeconds { get; set; }
+    public int? AverageBuildDurationSeconds { get; set; }
+    public int TotalBuildsCompleted { get; set; }
 }

@@ -22,11 +22,11 @@
                             <tr>
                                 <th>Name</th>
                                 <th>Machine</th>
-                                <th>IP Address</th>
                                 <th>Status</th>
                                 <th>Availability</th>
-                                <th>Last Heartbeat</th>
-                                <th>Current Job</th>
+                                <th>Last Build</th>
+                                <th>Avg (Last 5)</th>
+                                <th>Total Builds</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
@@ -35,8 +35,10 @@
                             {
                                 <tr>
                                     <td><strong>@agent.Name</strong></td>
-                                    <td>@agent.MachineName</td>
-                                    <td><code>@agent.IpAddress</code></td>
+                                    <td>
+                                        <div>@agent.MachineName</div>
+                                        <small class="text-muted">@agent.IpAddress</small>
+                                    </td>
                                     <td>
                                         @if (agent.IsOnline)
                                         {
@@ -57,15 +59,34 @@
                                             <span class="badge bg-warning">⏳ Busy</span>
                                         }
                                     </td>
-                                    <td>@agent.LastHeartbeat.ToString("g")</td>
                                     <td>
-                                        @if (!string.IsNullOrEmpty(agent.CurrentJobId))
+                                        @if (agent.LastBuildDurationSeconds.HasValue)
                                         {
-                                            <code>@agent.CurrentJobId</code>
+                                            <strong>@FormatDuration(agent.LastBuildDurationSeconds.Value)</strong>
                                         }
                                         else
                                         {
                                             <span class="text-muted">-</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (agent.AverageBuildDurationSeconds.HasValue)
+                                        {
+                                            <span class="text-info">@FormatDuration(agent.AverageBuildDurationSeconds.Value)</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">-</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (agent.TotalBuildsCompleted > 0)
+                                        {
+                                            <span class="badge bg-success">@agent.TotalBuildsCompleted</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">0</span>
                                         }
                                     </td>
                                     <td>
@@ -233,6 +254,22 @@
 
         CloseConfigModal();
         await LoadAgents();
+    }
+
+    private string FormatDuration(int seconds)
+    {
+        if (seconds < 60)
+            return $"{seconds}s";
+
+        var minutes = seconds / 60;
+        var secs = seconds % 60;
+
+        if (minutes < 60)
+            return $"{minutes}m {secs}s";
+
+        var hours = minutes / 60;
+        var mins = minutes % 60;
+        return $"{hours}h {mins}m";
     }
 
     private class AgentConfigDto
