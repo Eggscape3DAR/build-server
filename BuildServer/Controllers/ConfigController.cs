@@ -111,6 +111,26 @@ public class ConfigController : ControllerBase
         var configs = await _db.AgentConfigurations.ToListAsync();
         return Ok(configs);
     }
+
+    [HttpGet("settings")]
+    public async Task<IActionResult> GetGlobalSettings()
+    {
+        var settings = await _db.GlobalSettings.FirstOrDefaultAsync();
+
+        if (settings == null)
+        {
+            return NotFound(new { message = "Global settings not configured" });
+        }
+
+        // Return only necessary fields (don't expose GitHub token)
+        return Ok(new
+        {
+            GoogleDriveFolderId = settings.GoogleDriveFolderId,
+            GoogleDriveCredentialsJson = settings.GoogleDriveCredentialsJson,
+            RepositoryUrl = settings.RepositoryUrl,
+            DefaultBranch = settings.DefaultBranch
+        });
+    }
 }
 
 public record SaveConfigRequest(
