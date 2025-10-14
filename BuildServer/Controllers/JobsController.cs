@@ -30,6 +30,11 @@ public class JobsController : ControllerBase
             ProfileName = request.ProfileName,
             Platform = request.Platform,
             Channel = request.Channel,
+            GitBranch = request.GitBranch ?? "",
+            GitCommitHash = request.GitCommitHash ?? "",
+            GitCommitMessage = request.GitCommitMessage ?? "",
+            GitCommitAuthor = request.GitCommitAuthor ?? "",
+            GitCommitDate = request.GitCommitDate,
             Status = JobStatus.Queued,
             Progress = 0,
             CreatedAt = DateTime.UtcNow
@@ -184,7 +189,17 @@ public class JobsController : ControllerBase
     }
 }
 
-public record CreateJobRequest(string Name, string ProfileName, string Platform, string Channel);
+public record CreateJobRequest(
+    string Name,
+    string ProfileName,
+    string Platform,
+    string Channel,
+    string? GitBranch,
+    string? GitCommitHash,
+    string? GitCommitMessage,
+    string? GitCommitAuthor,
+    DateTime? GitCommitDate
+);
 public record UpdateProgressRequest(float Progress);
 public record CompleteJobRequest(string? BuildPath);
 public record FailJobRequest(string ErrorMessage);

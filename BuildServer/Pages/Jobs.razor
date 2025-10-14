@@ -2,8 +2,11 @@
 @using Microsoft.EntityFrameworkCore
 @using BuildServer.Data
 @using BuildServer.Models
+@using System.Net.Http
+@using System.Net.Http.Json
 @inject BuildServerContext DB
-@inject NavigationManager Navigation
+@inject HttpClient Http
+@inject IConfiguration Config
 
 <PageTitle>Jobs - Build Server</PageTitle>
 
@@ -52,17 +55,16 @@
 
                 @if (_jobs.Any())
                 {
-                    <table class="table table-hover">
+                    <table class="table table-hover table-sm">
                         <thead>
                             <tr>
                                 <th>Name</th>
                                 <th>Profile</th>
                                 <th>Platform</th>
-                                <th>Channel</th>
+                                <th>Branch</th>
+                                <th>Commit</th>
                                 <th>Status</th>
                                 <th>Progress</th>
-                                <th>Agent</th>
-                                <th>Created</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
@@ -71,71 +73,51 @@
                             {
                                 <tr>
                                     <td><strong>@job.Name</strong></td>
-                                    <td>@job.ProfileName</td>
-                                    <td>@job.Platform</td>
-                                    <td><span class="badge bg-info">@job.Channel</span></td>
+                                    <td><small>@job.ProfileName</small></td>
+                                    <td><small>@job.Platform</small></td>
+                                    <td>
+                                        @if (!string.IsNullOrEmpty(job.GitBranch))
+                                        {
+                                            <span class="badge bg-secondary">@job.GitBranch</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (!string.IsNullOrEmpty(job.GitCommitHash))
+                                        {
+                                            <code title="@job.GitCommitMessage">@job.GitCommitHash.Substring(0, Math.Min(7, job.GitCommitHash.Length))</code>
+                                        }
+                                    </td>
                                     <td>
                                         @switch (job.Status)
                                         {
                                             case JobStatus.Queued:
                                                 <span class="badge bg-secondary">⏳ Queued</span>
                                                 break;
-                                            case JobStatus.Assigned:
-                                                <span class="badge bg-info">📋 Assigned</span>
-                                                break;
                                             case JobStatus.Running:
                                                 <span class="badge bg-primary">▶️ Running</span>
                                                 break;
                                             case JobStatus.Completed:
-                                                <span class="badge bg-success">✅ Completed</span>
+                                                <span class="badge bg-success">✅ Done</span>
                                                 break;
                                             case JobStatus.Failed:
                                                 <span class="badge bg-danger">❌ Failed</span>
                                                 break;
-                                            case JobStatus.Cancelled:
-                                                <span class="badge bg-warning">🚫 Cancelled</span>
-                                                break;
                                         }
                                     </td>
-                                    <td>
+                                    <td style="width: 120px;">
                                         @if (job.Status == JobStatus.Running)
                                         {
-                                            <div class="progress">
-                                                <div class="progress-bar" role="progressbar"
-                                                     style="width: @((job.Progress * 100).ToString("F0"))%"
-                                                     aria-valuenow="@((int)(job.Progress * 100))"
-                                                     aria-valuemin="0" aria-valuemax="100">
+                                            <div class="progress" style="height: 20px;">
+                                                <div class="progress-bar" style="width: @((job.Progress * 100).ToString("F0"))%">
                                                     @((job.Progress * 100).ToString("F0"))%
                                                 </div>
                                             </div>
                                         }
-                                        else if (job.Status == JobStatus.Completed)
-                                        {
-                                            <span class="text-success">100%</span>
-                                        }
-                                        else
-                                        {
-                                            <span class="text-muted">-</span>
-                                        }
                                     </td>
                                     <td>
-                                        @if (!string.IsNullOrEmpty(job.AssignedAgentId))
-                                        {
-                                            <code>@job.AssignedAgentId</code>
-                                        }
-                                        else
-                                        {
-                                            <span class="text-muted">-</span>
-                                        }
-                                    </td>
-                                    <td>@job.CreatedAt.ToString("g")</td>
-                                    <td>
-                                        @if (job.Status == JobStatus.Failed && !string.IsNullOrEmpty(job.ErrorMessage))
-                                        {
-                                            <button class="btn btn-sm btn-danger" @onclick="() => ShowError(job)">
-                                                View Error
-                                            </button>
-                                        }
+                                        <button class="btn btn-sm btn-info" @onclick="() => ShowJobDetails(job)">
+                                            Details
+                                        </button>
                                         @if (job.Status == JobStatus.Queued)
                                         {
                                             <button class="btn btn-sm btn-outline-danger" @onclick="() => DeleteJob(job.JobId)">
@@ -163,79 +145,222 @@
 @if (_showCreateModal)
 {
     <div class="modal show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
-        <div class="modal-dialog">
+        <div class="modal-dialog modal-xl">
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title">Create New Build Job</h5>
                     <button type="button" class="btn-close" @onclick="CloseCreateModal"></button>
                 </div>
                 <div class="modal-body">
-                    <form>
-                        <div class="mb-3">
-                            <label class="form-label">Job Name</label>
-                            <input type="text" class="form-control" @bind="_newJob.Name"
-                                   placeholder="Android Dev Build" />
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6>Build Configuration</h6>
+
+                            <div class="mb-3">
+                                <label class="form-label">Job Name</label>
+                                <input type="text" class="form-control" @bind="_newJob.Name"
+                                       placeholder="Android Dev Build" />
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label">Profile</label>
+                                <select class="form-select" @bind="_newJob.ProfileName">
+                                    <option value="">Select profile...</option>
+                                    <option value="Android Dev APK">Android Dev APK</option>
+                                    <option value="Android Production APK">Android Production APK</option>
+                                    <option value="Android AAB">Android AAB</option>
+                                    <option value="iOS Development">iOS Development</option>
+                                    <option value="iOS AppStore">iOS AppStore</option>
+                                </select>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label">Platform</label>
+                                <select class="form-select" @bind="_newJob.Platform">
+                                    <option value="">Select platform...</option>
+                                    <option value="Android">Android</option>
+                                    <option value="iOS">iOS</option>
+                                    <option value="Windows">Windows</option>
+                                </select>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label">Channel</label>
+                                <select class="form-select" @bind="_newJob.Channel">
+                                    <option value="">Select channel...</option>
+                                    <option value="Development">Development</option>
+                                    <option value="Staging">Staging</option>
+                                    <option value="Production">Production</option>
+                                </select>
+                            </div>
                         </div>
 
-                        <div class="mb-3">
-                            <label class="form-label">Profile</label>
-                            <select class="form-select" @bind="_newJob.ProfileName">
-                                <option value="">Select profile...</option>
-                                <option value="Android Dev APK">Android Dev APK</option>
-                                <option value="Android Production APK">Android Production APK</option>
-                                <option value="Android AAB">Android AAB</option>
-                                <option value="iOS Development">iOS Development</option>
-                                <option value="iOS AppStore">iOS AppStore</option>
-                                <option value="Windows Dev">Windows Dev</option>
-                                <option value="Windows Release">Windows Release</option>
-                            </select>
-                        </div>
+                        <div class="col-md-6">
+                            <h6>Git Configuration</h6>
 
-                        <div class="mb-3">
-                            <label class="form-label">Platform</label>
-                            <select class="form-select" @bind="_newJob.Platform">
-                                <option value="">Select platform...</option>
-                                <option value="Android">Android</option>
-                                <option value="iOS">iOS</option>
-                                <option value="Windows">Windows</option>
-                                <option value="WebGL">WebGL</option>
-                            </select>
-                        </div>
+                            <div class="mb-3">
+                                <label class="form-label">Branch</label>
+                                <div class="input-group">
+                                    <select class="form-select" @bind="_selectedBranch" @bind:after="OnBranchChanged">
+                                        <option value="">Select branch...</option>
+                                        @foreach (var branch in _branches)
+                                        {
+                                            <option value="@branch.Name">@branch.Name</option>
+                                        }
+                                    </select>
+                                    <button class="btn btn-outline-secondary" type="button" @onclick="LoadBranches">
+                                        🔄 Refresh
+                                    </button>
+                                </div>
+                                @if (!string.IsNullOrEmpty(_defaultBranch))
+                                {
+                                    <small class="form-text text-muted">Default: @_defaultBranch</small>
+                                }
+                            </div>
 
-                        <div class="mb-3">
-                            <label class="form-label">Channel</label>
-                            <select class="form-select" @bind="_newJob.Channel">
-                                <option value="">Select channel...</option>
-                                <option value="Development">Development</option>
-                                <option value="Staging">Staging</option>
-                                <option value="Production">Production</option>
-                            </select>
+                            @if (_loadingCommits)
+                            {
+                                <div class="alert alert-info">Loading commits...</div>
+                            }
+                            else if (_commits.Any())
+                            {
+                                <div class="mb-3">
+                                    <label class="form-label">Select Commit (ordered by most recent)</label>
+                                    <div style="max-height: 300px; overflow-y: auto; border: 1px solid #dee2e6; border-radius: 0.25rem;">
+                                        @foreach (var commit in _commits)
+                                        {
+                                            <div class="p-2 border-bottom @(_selectedCommit == commit.Sha ? "bg-primary bg-opacity-10" : "")"
+                                                 style="cursor: pointer;"
+                                                 @onclick="() => SelectCommit(commit)">
+                                                <div class="d-flex justify-content-between">
+                                                    <strong><code>@commit.ShortSha</code></strong>
+                                                    <small class="text-muted">@commit.Date.ToString("g")</small>
+                                                </div>
+                                                <div class="small">@commit.Message</div>
+                                                <div class="small text-muted">👤 @commit.Author</div>
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                            else if (!string.IsNullOrEmpty(_selectedBranch))
+                            {
+                                <div class="alert alert-warning">No commits found for this branch</div>
+                            }
+
+                            @if (!string.IsNullOrEmpty(_selectedCommit))
+                            {
+                                <div class="alert alert-success">
+                                    <strong>Selected:</strong> @_selectedCommitInfo?.ShortSha
+                                    <br />
+                                    <small>@_selectedCommitInfo?.Message</small>
+                                </div>
+                            }
                         </div>
-                    </form>
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" @onclick="CloseCreateModal">Cancel</button>
-                    <button type="button" class="btn btn-primary" @onclick="CreateJob">Create Job</button>
+                    <button type="button" class="btn btn-primary" @onclick="CreateJob" disabled="@(!CanCreateJob())">
+                        Create Job
+                    </button>
                 </div>
             </div>
         </div>
     </div>
 }
 
-@if (_showErrorModal)
+@if (_showDetailsModal && _selectedJob != null)
 {
     <div class="modal show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">Job Error</h5>
-                    <button type="button" class="btn-close" @onclick="CloseErrorModal"></button>
+                    <h5 class="modal-title">Job Details</h5>
+                    <button type="button" class="btn-close" @onclick="CloseDetailsModal"></button>
                 </div>
                 <div class="modal-body">
-                    <pre>@_errorMessage</pre>
+                    <table class="table">
+                        <tr>
+                            <th>Job ID</th>
+                            <td><code>@_selectedJob.JobId</code></td>
+                        </tr>
+                        <tr>
+                            <th>Name</th>
+                            <td>@_selectedJob.Name</td>
+                        </tr>
+                        <tr>
+                            <th>Profile</th>
+                            <td>@_selectedJob.ProfileName</td>
+                        </tr>
+                        <tr>
+                            <th>Platform</th>
+                            <td>@_selectedJob.Platform</td>
+                        </tr>
+                        <tr>
+                            <th>Channel</th>
+                            <td>@_selectedJob.Channel</td>
+                        </tr>
+                        <tr>
+                            <th>Git Branch</th>
+                            <td><span class="badge bg-secondary">@_selectedJob.GitBranch</span></td>
+                        </tr>
+                        <tr>
+                            <th>Git Commit</th>
+                            <td><code>@_selectedJob.GitCommitHash</code></td>
+                        </tr>
+                        <tr>
+                            <th>Commit Message</th>
+                            <td>@_selectedJob.GitCommitMessage</td>
+                        </tr>
+                        <tr>
+                            <th>Commit Author</th>
+                            <td>@_selectedJob.GitCommitAuthor</td>
+                        </tr>
+                        <tr>
+                            <th>Commit Date</th>
+                            <td>@_selectedJob.GitCommitDate?.ToString("g")</td>
+                        </tr>
+                        <tr>
+                            <th>Status</th>
+                            <td>@_selectedJob.Status</td>
+                        </tr>
+                        <tr>
+                            <th>Created</th>
+                            <td>@_selectedJob.CreatedAt.ToString("g")</td>
+                        </tr>
+                        @if (_selectedJob.StartedAt.HasValue)
+                        {
+                            <tr>
+                                <th>Started</th>
+                                <td>@_selectedJob.StartedAt.Value.ToString("g")</td>
+                            </tr>
+                        }
+                        @if (_selectedJob.CompletedAt.HasValue)
+                        {
+                            <tr>
+                                <th>Completed</th>
+                                <td>@_selectedJob.CompletedAt.Value.ToString("g")</td>
+                            </tr>
+                            @if (_selectedJob.StartedAt.HasValue)
+                            {
+                                <tr>
+                                    <th>Duration</th>
+                                    <td>@((_selectedJob.CompletedAt.Value - _selectedJob.StartedAt.Value).ToString(@"hh\:mm\:ss"))</td>
+                                </tr>
+                            }
+                        }
+                        @if (!string.IsNullOrEmpty(_selectedJob.ErrorMessage))
+                        {
+                            <tr>
+                                <th>Error</th>
+                                <td><pre class="bg-danger text-white p-2">@_selectedJob.ErrorMessage</pre></td>
+                            </tr>
+                        }
+                    </table>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" @onclick="CloseErrorModal">Close</button>
+                    <button type="button" class="btn btn-secondary" @onclick="CloseDetailsModal">Close</button>
                 </div>
             </div>
         </div>
@@ -244,42 +369,130 @@
 
 @code {
     private List<Job> _jobs = new();
+    private List<BranchDto> _branches = new();
+    private List<CommitDto> _commits = new();
+    private string _selectedBranch = "";
+    private string _selectedCommit = "";
+    private CommitDto? _selectedCommitInfo;
+    private string _defaultBranch = "development";
+    private bool _loadingCommits = false;
+
     private bool _showCreateModal = false;
-    private bool _showErrorModal = false;
-    private string? _errorMessage;
+    private bool _showDetailsModal = false;
+    private Job? _selectedJob;
     private CreateJobDto _newJob = new();
 
     protected override async Task OnInitializedAsync()
     {
         await LoadJobs();
+        await LoadDefaultBranch();
     }
 
     private async Task LoadJobs()
     {
-        _jobs = await DB.Jobs
-            .OrderByDescending(j => j.CreatedAt)
-            .ToListAsync();
+        _jobs = await DB.Jobs.OrderByDescending(j => j.CreatedAt).ToListAsync();
     }
 
-    private void ShowCreateModal()
+    private async Task LoadDefaultBranch()
+    {
+        var settings = await DB.GlobalSettings.FirstOrDefaultAsync();
+        if (settings != null)
+        {
+            _defaultBranch = settings.DefaultBranch;
+        }
+    }
+
+    private async Task ShowCreateModal()
     {
         _newJob = new CreateJobDto();
+        _selectedBranch = _defaultBranch;
+        _selectedCommit = "";
+        _selectedCommitInfo = null;
+        _commits.Clear();
+
         _showCreateModal = true;
+        await LoadBranches();
+
+        if (!string.IsNullOrEmpty(_defaultBranch))
+        {
+            _selectedBranch = _defaultBranch;
+            await OnBranchChanged();
+        }
     }
 
     private void CloseCreateModal()
     {
         _showCreateModal = false;
         _newJob = new CreateJobDto();
+        _branches.Clear();
+        _commits.Clear();
+        _selectedBranch = "";
+        _selectedCommit = "";
+    }
+
+    private async Task LoadBranches()
+    {
+        try
+        {
+            var response = await Http.GetFromJsonAsync<List<BranchDto>>("/api/git/branches");
+            if (response != null)
+            {
+                _branches = response;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading branches: {ex.Message}");
+        }
+    }
+
+    private async Task OnBranchChanged()
+    {
+        _selectedCommit = "";
+        _selectedCommitInfo = null;
+        _commits.Clear();
+
+        if (string.IsNullOrEmpty(_selectedBranch))
+            return;
+
+        _loadingCommits = true;
+        try
+        {
+            var response = await Http.GetFromJsonAsync<List<CommitDto>>($"/api/git/commits?branch={_selectedBranch}&count=20");
+            if (response != null)
+            {
+                _commits = response;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading commits: {ex.Message}");
+        }
+        finally
+        {
+            _loadingCommits = false;
+        }
+    }
+
+    private void SelectCommit(CommitDto commit)
+    {
+        _selectedCommit = commit.Sha;
+        _selectedCommitInfo = commit;
+    }
+
+    private bool CanCreateJob()
+    {
+        return !string.IsNullOrEmpty(_newJob.Name) &&
+               !string.IsNullOrEmpty(_newJob.ProfileName) &&
+               !string.IsNullOrEmpty(_newJob.Platform) &&
+               !string.IsNullOrEmpty(_newJob.Channel) &&
+               !string.IsNullOrEmpty(_selectedBranch) &&
+               !string.IsNullOrEmpty(_selectedCommit);
     }
 
     private async Task CreateJob()
     {
-        if (string.IsNullOrEmpty(_newJob.Name) || string.IsNullOrEmpty(_newJob.ProfileName)
-            || string.IsNullOrEmpty(_newJob.Platform) || string.IsNullOrEmpty(_newJob.Channel))
-        {
-            return;
-        }
+        if (!CanCreateJob()) return;
 
         var job = new Job
         {
@@ -287,6 +500,11 @@
             ProfileName = _newJob.ProfileName,
             Platform = _newJob.Platform,
             Channel = _newJob.Channel,
+            GitBranch = _selectedBranch,
+            GitCommitHash = _selectedCommitInfo?.Sha ?? _selectedCommit,
+            GitCommitMessage = _selectedCommitInfo?.Message ?? "",
+            GitCommitAuthor = _selectedCommitInfo?.Author ?? "",
+            GitCommitDate = _selectedCommitInfo?.Date,
             Status = JobStatus.Queued,
             Progress = 0,
             CreatedAt = DateTime.UtcNow
@@ -299,16 +517,16 @@
         await LoadJobs();
     }
 
-    private void ShowError(Job job)
+    private void ShowJobDetails(Job job)
     {
-        _errorMessage = job.ErrorMessage;
-        _showErrorModal = true;
+        _selectedJob = job;
+        _showDetailsModal = true;
     }
 
-    private void CloseErrorModal()
+    private void CloseDetailsModal()
     {
-        _showErrorModal = false;
-        _errorMessage = null;
+        _showDetailsModal = false;
+        _selectedJob = null;
     }
 
     private async Task DeleteJob(string jobId)
@@ -328,5 +546,23 @@
         public string ProfileName { get; set; } = "";
         public string Platform { get; set; } = "";
         public string Channel { get; set; } = "";
+    }
+
+    private class BranchDto
+    {
+        public string Name { get; set; } = "";
+        public string CommitSha { get; set; } = "";
+        public string CommitUrl { get; set; } = "";
+    }
+
+    private class CommitDto
+    {
+        public string Sha { get; set; } = "";
+        public string ShortSha { get; set; } = "";
+        public string Message { get; set; } = "";
+        public string Author { get; set; } = "";
+        public string AuthorEmail { get; set; } = "";
+        public DateTime Date { get; set; }
+        public string Url { get; set; } = "";
     }
 }

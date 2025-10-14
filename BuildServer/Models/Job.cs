@@ -8,6 +8,14 @@ public class Job
     public string ProfileName { get; set; } = string.Empty;
     public string Platform { get; set; } = string.Empty;
     public string Channel { get; set; } = string.Empty;
+
+    // Git information
+    public string GitBranch { get; set; } = string.Empty;
+    public string GitCommitHash { get; set; } = string.Empty;
+    public string GitCommitMessage { get; set; } = string.Empty;
+    public string GitCommitAuthor { get; set; } = string.Empty;
+    public DateTime? GitCommitDate { get; set; }
+
     public JobStatus Status { get; set; } = JobStatus.Queued;
     public float Progress { get; set; }
     public string? AssignedAgentId { get; set; }

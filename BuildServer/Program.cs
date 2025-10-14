@@ -17,6 +17,15 @@ var connectionString = builder.Configuration.GetConnectionString("DefaultConnect
 builder.Services.AddDbContext<BuildServerContext>(options =>
     options.UseSqlite(connectionString));
 
+// Application services
+builder.Services.AddScoped<GitService>();
+builder.Services.AddScoped(sp => new HttpClient
+{
+    BaseAddress = new Uri(sp.GetRequiredService<IHttpContextAccessor>().HttpContext?.Request?.Scheme + "://" +
+                          sp.GetRequiredService<IHttpContextAccessor>().HttpContext?.Request?.Host ?? "http://localhost:5000")
+});
+builder.Services.AddHttpContextAccessor();
+
 // Background services
 builder.Services.AddHostedService<AgentHealthCheckService>();
 

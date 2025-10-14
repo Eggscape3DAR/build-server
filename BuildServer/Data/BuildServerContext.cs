@@ -11,6 +11,7 @@ public class BuildServerContext : DbContext
     public DbSet<Agent> Agents => Set<Agent>();
     public DbSet<Job> Jobs => Set<Job>();
     public DbSet<AgentConfiguration> AgentConfigurations => Set<AgentConfiguration>();
+    public DbSet<GlobalSettings> GlobalSettings => Set<GlobalSettings>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

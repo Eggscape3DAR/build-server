@@ -1,0 +1,204 @@
+@page "/settings"
+@using Microsoft.EntityFrameworkCore
+@using BuildServer.Data
+@using BuildServer.Models
+@inject BuildServerContext DB
+
+<PageTitle>Settings - Build Server</PageTitle>
+
+<h1>⚙️ Settings</h1>
+
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">GitHub Configuration</h5>
+                <p class="text-muted">Configure GitHub access for fetching branches and commits</p>
+
+                <form>
+                    <div class="mb-3">
+                        <label class="form-label">Repository URL</label>
+                        <input type="text" class="form-control" @bind="_settings.RepositoryUrl"
+                               placeholder="https://github.com/Eggscape3DAR/eggscape" />
+                        <small class="form-text text-muted">Full GitHub repository URL</small>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">Repository Owner</label>
+                                <input type="text" class="form-control" @bind="_settings.RepositoryOwner"
+                                       placeholder="Eggscape3DAR" />
+                                <small class="form-text text-muted">GitHub organization or username</small>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">Repository Name</label>
+                                <input type="text" class="form-control" @bind="_settings.RepositoryName"
+                                       placeholder="eggscape" />
+                                <small class="form-text text-muted">Repository name (without owner)</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">GitHub Personal Access Token</label>
+                        <input type="password" class="form-control" @bind="_settings.GitHubToken"
+                               placeholder="ghp_..." />
+                        <small class="form-text text-muted">
+                            Required permissions: <code>repo</code> (full control of private repositories)
+                            <br />
+                            <a href="https://github.com/settings/tokens" target="_blank">Create token here</a>
+                        </small>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Default Branch</label>
+                        <input type="text" class="form-control" @bind="_settings.DefaultBranch"
+                               placeholder="development" />
+                        <small class="form-text text-muted">Default branch for new build jobs</small>
+                    </div>
+
+                    <div class="d-flex gap-2">
+                        <button type="button" class="btn btn-primary" @onclick="SaveSettings">
+                            💾 Save Settings
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary" @onclick="TestConnection">
+                            🔍 Test Connection
+                        </button>
+                    </div>
+
+                    @if (!string.IsNullOrEmpty(_message))
+                    {
+                        <div class="alert @(_isError ? "alert-danger" : "alert-success") mt-3" role="alert">
+                            @_message
+                        </div>
+                    }
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Build Server Information</h5>
+                <table class="table">
+                    <tbody>
+                        <tr>
+                            <th>Total Agents</th>
+                            <td>@_totalAgents</td>
+                        </tr>
+                        <tr>
+                            <th>Total Jobs</th>
+                            <td>@_totalJobs</td>
+                        </tr>
+                        <tr>
+                            <th>Completed Builds</th>
+                            <td>@_completedBuilds</td>
+                        </tr>
+                        <tr>
+                            <th>Last Updated</th>
+                            <td>@(_settings.UpdatedAt.ToString("g"))</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private GlobalSettings _settings = new();
+    private string _message = "";
+    private bool _isError = false;
+    private int _totalAgents = 0;
+    private int _totalJobs = 0;
+    private int _completedBuilds = 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadSettings();
+        await LoadStats();
+    }
+
+    private async Task LoadSettings()
+    {
+        var settings = await DB.GlobalSettings.FirstOrDefaultAsync();
+        if (settings != null)
+        {
+            _settings = settings;
+        }
+        else
+        {
+            _settings = new GlobalSettings
+            {
+                DefaultBranch = "development"
+            };
+        }
+    }
+
+    private async Task LoadStats()
+    {
+        _totalAgents = await DB.Agents.CountAsync();
+        _totalJobs = await DB.Jobs.CountAsync();
+        _completedBuilds = await DB.Jobs.CountAsync(j => j.Status == JobStatus.Completed);
+    }
+
+    private async Task SaveSettings()
+    {
+        try
+        {
+            var existing = await DB.GlobalSettings.FirstOrDefaultAsync();
+            if (existing == null)
+            {
+                DB.GlobalSettings.Add(_settings);
+            }
+            else
+            {
+                existing.RepositoryUrl = _settings.RepositoryUrl;
+                existing.RepositoryOwner = _settings.RepositoryOwner;
+                existing.RepositoryName = _settings.RepositoryName;
+                existing.GitHubToken = _settings.GitHubToken;
+                existing.DefaultBranch = _settings.DefaultBranch;
+                existing.UpdatedAt = DateTime.UtcNow;
+            }
+
+            await DB.SaveChangesAsync();
+
+            _message = "Settings saved successfully!";
+            _isError = false;
+        }
+        catch (Exception ex)
+        {
+            _message = $"Error saving settings: {ex.Message}";
+            _isError = true;
+        }
+    }
+
+    private async Task TestConnection()
+    {
+        try
+        {
+            if (string.IsNullOrEmpty(_settings.RepositoryOwner) ||
+                string.IsNullOrEmpty(_settings.RepositoryName) ||
+                string.IsNullOrEmpty(_settings.GitHubToken))
+            {
+                _message = "Please fill in all GitHub configuration fields before testing.";
+                _isError = true;
+                return;
+            }
+
+            _message = "Testing connection... (Not implemented yet - will test GitHub API access)";
+            _isError = false;
+        }
+        catch (Exception ex)
+        {
+            _message = $"Connection test failed: {ex.Message}";
+            _isError = true;
+        }
+    }
+}
