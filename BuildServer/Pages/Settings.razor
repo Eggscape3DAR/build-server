@@ -6,46 +6,9 @@
 @inject BuildServerContext DB
 @inject GitService GitService
 
-<PageTitle>Settings - Eggscape Build Server</PageTitle>
+<PageTitle>Settings - Build Server</PageTitle>
 
-@if (!_isAuthenticated)
-{
-    <div class="container" style="max-width: 400px; margin-top: 100px;">
-        <div class="card">
-            <div class="card-body text-center">
-                <h3>🔒 Protected Settings</h3>
-                <p class="text-muted">Enter password to access settings</p>
-
-                <form @onsubmit="CheckPassword">
-                    <div class="mb-3">
-                        <input type="password" class="form-control" @bind="_passwordInput"
-                               placeholder="Enter password" autofocus />
-                    </div>
-
-                    @if (!string.IsNullOrEmpty(_authError))
-                    {
-                        <div class="alert alert-danger">
-                            ❌ @_authError
-                        </div>
-                    }
-
-                    <button type="submit" class="btn btn-primary w-100">
-                        🔓 Unlock Settings
-                    </button>
-                </form>
-            </div>
-        </div>
-    </div>
-}
-else
-{
-    <div class="d-flex justify-content-between align-items-center">
-        <h1>⚙️ Settings</h1>
-        <button class="btn btn-outline-secondary btn-sm" @onclick="Logout">
-            🔒 Lock Settings
-        </button>
-    </div>
-    <p class="text-muted">🥚 Configure your Eggscape Build Server 🥚</p>
+<h1>⚙️ Settings</h1>
 
 <div class="row mt-4">
     <div class="col-12">
@@ -124,55 +87,59 @@ else
     <div class="col-12">
         <div class="card">
             <div class="card-body">
-                <h5 class="card-title">🗂️ Google Drive Configuration</h5>
-                <p class="text-muted">Configure Google Drive for build artifact storage</p>
+                <h5 class="card-title">Portal Server Configuration</h5>
+                <p class="text-muted">Configure connection to Eggscape Portal Server for bundle code management</p>
 
-                <form>
-                    <div class="mb-3">
-                        <label class="form-label">Google Drive Folder ID</label>
-                        <input type="text" class="form-control" @bind="_settings.GoogleDriveFolderId"
-                               placeholder="127SFVubjMJrQfS965hm5Cl3V6h4yfcru" />
-                        <small class="form-text text-muted">
-                            Folder ID from Google Drive URL: https://drive.google.com/drive/folders/<strong>FOLDER_ID</strong>
-                        </small>
-                    </div>
+                <div class="mb-3">
+                    <label class="form-label">Portal Server URL</label>
+                    <input type="text" class="form-control" @bind="_settings.PortalServerUrl"
+                           placeholder="https://eggscapeportalserver.onrender.com" />
+                    <small class="form-text text-muted">Base URL for the Portal Server API</small>
+                </div>
 
-                    <div class="mb-3">
-                        <label class="form-label">Service Account Credentials (JSON)</label>
-                        <textarea class="form-control font-monospace" rows="8" @bind="_settings.GoogleDriveCredentialsJson"
-                                  placeholder='{"type": "service_account", "project_id": "...", ...}'
-                                  style="font-size: 0.85rem;"></textarea>
-                        <small class="form-text text-muted">
-                            Paste the entire JSON from your Google Cloud Service Account key file.
-                            <br />
-                            <strong>Setup:</strong> <a href="https://console.cloud.google.com/iam-admin/serviceaccounts" target="_blank">Create Service Account</a>
-                            → Enable Google Drive API → Share Drive folder with service account email
-                        </small>
-                    </div>
+                <div class="mb-3">
+                    <label class="form-label">Portal Server Secret</label>
+                    <input type="password" class="form-control" @bind="_settings.PortalServerSecret"
+                           placeholder="Enter secret key..." />
+                    <small class="form-text text-muted">Secret key for updating bundle codes</small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 
-                    <div class="mb-3">
-                        <label class="form-label">Portal Server URL</label>
-                        <input type="text" class="form-control" @bind="_settings.PortalServerUrl"
-                               placeholder="https://eggscapeportalserver.onrender.com" />
-                        <small class="form-text text-muted">Portal server for upload notifications</small>
-                    </div>
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Google Drive Configuration</h5>
+                <p class="text-muted">Configure Google Drive for automatic build artifact uploads</p>
 
-                    <div class="d-flex gap-2">
-                        <button type="button" class="btn btn-primary" @onclick="SaveSettings">
-                            💾 Save Google Drive Settings
-                        </button>
-                        <button type="button" class="btn btn-outline-secondary" @onclick="TestDriveConnection">
-                            🔍 Test Drive Connection
-                        </button>
-                    </div>
+                <div class="mb-3">
+                    <label class="form-label">Google Drive Folder ID</label>
+                    <input type="text" class="form-control" @bind="_settings.GoogleDriveFolderId"
+                           placeholder="127SFVubjMJrQfS965hm5Cl3V6h4yfcru" />
+                    <small class="form-text text-muted">
+                        Folder ID from Google Drive URL.
+                        Current folder: <a href="https://drive.google.com/drive/folders/@_settings.GoogleDriveFolderId" target="_blank">Open in Drive</a>
+                    </small>
+                </div>
 
-                    @if (!string.IsNullOrEmpty(_driveMessage))
-                    {
-                        <div class="alert @(_isDriveError ? "alert-danger" : "alert-success") mt-3" role="alert">
-                            @_driveMessage
-                        </div>
-                    }
-                </form>
+                <div class="mb-3">
+                    <label class="form-label">Google Drive Service Account JSON</label>
+                    <textarea class="form-control" @bind="_settings.GoogleDriveCredentialsJson"
+                              rows="10" style="font-family: monospace; font-size: 12px;"
+                              placeholder='{"type": "service_account", "project_id": "..."}'>
+                    </textarea>
+                    <small class="form-text text-muted">
+                        Paste the complete JSON file content from Google Cloud Service Account.
+                        <a href="https://console.cloud.google.com/iam-admin/serviceaccounts" target="_blank">Create Service Account</a>
+                        <br />
+                        <strong>Important:</strong> Share the Drive folder with the <code>client_email</code> from this JSON (Editor permissions).
+                        <br />
+                        See <code>GOOGLE-DRIVE-SETUP.md</code> for detailed instructions.
+                    </small>
+                </div>
             </div>
         </div>
     </div>
@@ -208,52 +175,18 @@ else
     </div>
 </div>
 
-}
-
 @code {
-    private const string SETTINGS_PASSWORD = "modopatapim";
-    private bool _isAuthenticated = false;
-    private string _passwordInput = "";
-    private string _authError = "";
-
     private GlobalSettings _settings = new();
     private string _message = "";
     private bool _isError = false;
-    private string _driveMessage = "";
-    private bool _isDriveError = false;
     private int _totalAgents = 0;
     private int _totalJobs = 0;
     private int _completedBuilds = 0;
 
     protected override async Task OnInitializedAsync()
     {
-        if (_isAuthenticated)
-        {
-            await LoadSettings();
-            await LoadStats();
-        }
-    }
-
-    private void CheckPassword()
-    {
-        if (_passwordInput == SETTINGS_PASSWORD)
-        {
-            _isAuthenticated = true;
-            _authError = "";
-            _ = OnInitializedAsync(); // Load settings after authentication
-        }
-        else
-        {
-            _authError = "Incorrect password. Please try again.";
-            _passwordInput = "";
-        }
-    }
-
-    private void Logout()
-    {
-        _isAuthenticated = false;
-        _passwordInput = "";
-        _authError = "";
+        await LoadSettings();
+        await LoadStats();
     }
 
     private async Task LoadSettings()
@@ -298,9 +231,6 @@ else
                 existing.RepositoryName = _settings.RepositoryName;
                 existing.GitHubToken = _settings.GitHubToken;
                 existing.DefaultBranch = _settings.DefaultBranch;
-                existing.GoogleDriveFolderId = _settings.GoogleDriveFolderId;
-                existing.GoogleDriveCredentialsJson = _settings.GoogleDriveCredentialsJson;
-                existing.PortalServerUrl = _settings.PortalServerUrl;
                 existing.UpdatedAt = DateTime.UtcNow;
             }
 
@@ -368,58 +298,6 @@ else
         {
             _message = $"❌ Connection test failed: {ex.Message}";
             _isError = true;
-        }
-    }
-
-    private async Task TestDriveConnection()
-    {
-        try
-        {
-            if (string.IsNullOrEmpty(_settings.GoogleDriveFolderId) ||
-                string.IsNullOrEmpty(_settings.GoogleDriveCredentialsJson))
-            {
-                _driveMessage = "Please fill in Google Drive Folder ID and Service Account credentials before testing.";
-                _isDriveError = true;
-                return;
-            }
-
-            _driveMessage = "Testing Google Drive connection...";
-            _isDriveError = false;
-            StateHasChanged();
-
-            // Basic validation of JSON
-            try
-            {
-                var json = System.Text.Json.JsonDocument.Parse(_settings.GoogleDriveCredentialsJson);
-                var type = json.RootElement.GetProperty("type").GetString();
-                var clientEmail = json.RootElement.GetProperty("client_email").GetString();
-
-                if (type != "service_account")
-                {
-                    _driveMessage = "❌ Invalid credentials: Must be a service account JSON";
-                    _isDriveError = true;
-                    return;
-                }
-
-                _driveMessage = $"✅ Credentials validated! Service Account: {clientEmail}\n\n" +
-                               $"📁 Folder ID: {_settings.GoogleDriveFolderId}\n\n" +
-                               $"⚠️ Make sure the folder is shared with this service account!\n" +
-                               $"Share link: https://drive.google.com/drive/folders/{_settings.GoogleDriveFolderId}";
-                _isDriveError = false;
-
-                // Save settings
-                await SaveSettings();
-            }
-            catch (System.Text.Json.JsonException)
-            {
-                _driveMessage = "❌ Invalid JSON format. Please paste the entire service account JSON.";
-                _isDriveError = true;
-            }
-        }
-        catch (Exception ex)
-        {
-            _driveMessage = $"❌ Test failed: {ex.Message}";
-            _isDriveError = true;
         }
     }
 }

@@ -64,6 +64,7 @@
                                 <th>Build Type</th>
                                 <th>Branch</th>
                                 <th>Commit</th>
+                                <th>Agent</th>
                                 <th>Status</th>
                                 <th>Progress</th>
                                 <th>Actions</th>
@@ -86,6 +87,28 @@
                                         @if (!string.IsNullOrEmpty(job.GitCommitHash))
                                         {
                                             <code title="@job.GitCommitMessage">@job.GitCommitHash.Substring(0, Math.Min(7, job.GitCommitHash.Length))</code>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (!string.IsNullOrEmpty(job.AssignedAgentId))
+                                        {
+                                            var agent = _agents.FirstOrDefault(a => a.AgentId == job.AssignedAgentId);
+                                            if (agent != null)
+                                            {
+                                                <span class="badge bg-info" title="@agent.AgentId">
+                                                    🖥️ @agent.Name
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge bg-secondary" title="@job.AssignedAgentId">
+                                                    🖥️ Unknown Agent
+                                                </span>
+                                            }
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted small">Not assigned</span>
                                         }
                                     </td>
                                     <td>
@@ -425,6 +448,35 @@
                             <td>@_selectedJob.Status</td>
                         </tr>
                         <tr>
+                            <th>Assigned Agent</th>
+                            <td>
+                                @if (!string.IsNullOrEmpty(_selectedJob.AssignedAgentId))
+                                {
+                                    var agent = _agents.FirstOrDefault(a => a.AgentId == _selectedJob.AssignedAgentId);
+                                    if (agent != null)
+                                    {
+                                        <div>
+                                            <strong>🖥️ @agent.Name</strong>
+                                            <br />
+                                            <small class="text-muted">Machine: @agent.MachineName</small>
+                                            <br />
+                                            <small class="text-muted">Status: @(agent.IsOnline ? "🟢 Online" : "🔴 Offline")</small>
+                                            <br />
+                                            <code>@agent.AgentId</code>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">Unknown Agent: <code>@_selectedJob.AssignedAgentId</code></span>
+                                    }
+                                }
+                                else
+                                {
+                                    <span class="text-muted">Not assigned</span>
+                                }
+                            </td>
+                        </tr>
+                        <tr>
                             <th>Created</th>
                             <td>@_selectedJob.CreatedAt.ToString("g")</td>
                         </tr>
@@ -468,6 +520,7 @@
 
 @code {
     private List<Job> _jobs = new();
+    private List<Agent> _agents = new();
     private List<Agent> _availableAgents = new();
     private List<BranchDto> _branches = new();
     private List<CommitDto> _commits = new();
@@ -494,6 +547,7 @@
     private async Task LoadJobs()
     {
         _jobs = await DB.Jobs.OrderByDescending(j => j.CreatedAt).ToListAsync();
+        _agents = await DB.Agents.ToListAsync();
     }
 
     private async Task LoadDefaultBranch()
