@@ -1,5 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using BuildServer.Data;
+using BuildServer.Hubs;
+using BuildServer.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -7,12 +9,16 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddRazorPages();
 builder.Services.AddServerSideBlazor();
 builder.Services.AddControllers();
+builder.Services.AddSignalR(); // Add SignalR
 
 // Database
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
     ?? "Data Source=/app/data/buildserver.db";
 builder.Services.AddDbContext<BuildServerContext>(options =>
     options.UseSqlite(connectionString));
+
+// Background services
+builder.Services.AddHostedService<AgentHealthCheckService>();
 
 // Swagger (API docs)
 builder.Services.AddEndpointsApiExplorer();
@@ -54,6 +60,7 @@ app.UseStaticFiles();
 app.UseRouting();
 
 app.MapBlazorHub();
+app.MapHub<BuildHub>("/hubs/build"); // Map SignalR hub
 app.MapFallbackToPage("/_Host");
 app.MapControllers();
 

@@ -1,0 +1,223 @@
+@page "/builds"
+@using Microsoft.EntityFrameworkCore
+@using BuildServer.Data
+@using BuildServer.Models
+@inject BuildServerContext DB
+
+<PageTitle>Builds - Build Server</PageTitle>
+
+<h1>📊 Build History</h1>
+
+<div class="row mt-4">
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Total Builds</h5>
+                <h2>@_completedJobs.Count</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Successful</h5>
+                <h2 class="text-success">@_completedJobs.Count(j => j.Status == JobStatus.Completed)</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Failed</h5>
+                <h2 class="text-danger">@_completedJobs.Count(j => j.Status == JobStatus.Failed)</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Success Rate</h5>
+                <h2>@GetSuccessRate()%</h2>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Completed Builds</h5>
+
+                <div class="mb-3">
+                    <label class="form-label">Filter by Platform:</label>
+                    <select class="form-select" @bind="_selectedPlatform" @bind:after="FilterBuilds">
+                        <option value="">All Platforms</option>
+                        <option value="Android">Android</option>
+                        <option value="iOS">iOS</option>
+                        <option value="Windows">Windows</option>
+                        <option value="WebGL">WebGL</option>
+                    </select>
+                </div>
+
+                @if (_filteredJobs.Any())
+                {
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Profile</th>
+                                <th>Platform</th>
+                                <th>Channel</th>
+                                <th>Status</th>
+                                <th>Agent</th>
+                                <th>Started</th>
+                                <th>Duration</th>
+                                <th>Details</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var job in _filteredJobs)
+                            {
+                                <tr>
+                                    <td><strong>@job.Name</strong></td>
+                                    <td>@job.ProfileName</td>
+                                    <td>@job.Platform</td>
+                                    <td><span class="badge bg-info">@job.Channel</span></td>
+                                    <td>
+                                        @if (job.Status == JobStatus.Completed)
+                                        {
+                                            <span class="badge bg-success">✅ Success</span>
+                                        }
+                                        else if (job.Status == JobStatus.Failed)
+                                        {
+                                            <span class="badge bg-danger">❌ Failed</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (!string.IsNullOrEmpty(job.AssignedAgentId))
+                                        {
+                                            <code>@job.AssignedAgentId</code>
+                                        }
+                                    </td>
+                                    <td>@job.StartedAt?.ToString("g")</td>
+                                    <td>
+                                        @if (job.StartedAt.HasValue && job.CompletedAt.HasValue)
+                                        {
+                                            var duration = job.CompletedAt.Value - job.StartedAt.Value;
+                                            <span>@duration.ToString(@"hh\:mm\:ss")</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (job.Status == JobStatus.Failed && !string.IsNullOrEmpty(job.ErrorMessage))
+                                        {
+                                            <button class="btn btn-sm btn-outline-danger" @onclick="() => ShowError(job)">
+                                                View Error
+                                            </button>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+                else
+                {
+                    <div class="alert alert-info">
+                        <strong>No completed builds yet.</strong>
+                        <p>Build history will appear here once jobs complete.</p>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (_showErrorModal)
+{
+    <div class="modal show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title">Build Error Details</h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CloseErrorModal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <strong>Job:</strong> @_selectedJob?.Name
+                    </div>
+                    <div class="mb-3">
+                        <strong>Platform:</strong> @_selectedJob?.Platform
+                    </div>
+                    <div class="mb-3">
+                        <strong>Profile:</strong> @_selectedJob?.ProfileName
+                    </div>
+                    <hr />
+                    <div>
+                        <strong>Error Message:</strong>
+                        <pre class="bg-light p-3 mt-2">@_errorMessage</pre>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseErrorModal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<Job> _completedJobs = new();
+    private List<Job> _filteredJobs = new();
+    private string _selectedPlatform = "";
+    private bool _showErrorModal = false;
+    private string? _errorMessage;
+    private Job? _selectedJob;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadBuilds();
+        FilterBuilds();
+    }
+
+    private async Task LoadBuilds()
+    {
+        _completedJobs = await DB.Jobs
+            .Where(j => j.Status == JobStatus.Completed || j.Status == JobStatus.Failed)
+            .OrderByDescending(j => j.CompletedAt)
+            .ToListAsync();
+    }
+
+    private void FilterBuilds()
+    {
+        if (string.IsNullOrEmpty(_selectedPlatform))
+        {
+            _filteredJobs = _completedJobs;
+        }
+        else
+        {
+            _filteredJobs = _completedJobs.Where(j => j.Platform == _selectedPlatform).ToList();
+        }
+    }
+
+    private int GetSuccessRate()
+    {
+        if (_completedJobs.Count == 0) return 0;
+        var successful = _completedJobs.Count(j => j.Status == JobStatus.Completed);
+        return (int)((double)successful / _completedJobs.Count * 100);
+    }
+
+    private void ShowError(Job job)
+    {
+        _selectedJob = job;
+        _errorMessage = job.ErrorMessage;
+        _showErrorModal = true;
+    }
+
+    private void CloseErrorModal()
+    {
+        _showErrorModal = false;
+        _errorMessage = null;
+        _selectedJob = null;
+    }
+}

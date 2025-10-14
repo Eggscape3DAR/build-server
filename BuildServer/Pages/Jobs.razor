@@ -1,0 +1,332 @@
+@page "/jobs"
+@using Microsoft.EntityFrameworkCore
+@using BuildServer.Data
+@using BuildServer.Models
+@inject BuildServerContext DB
+@inject NavigationManager Navigation
+
+<PageTitle>Jobs - Build Server</PageTitle>
+
+<h1>📦 Build Jobs</h1>
+
+<div class="row mt-4">
+    <div class="col-12">
+        <button class="btn btn-primary mb-3" @onclick="ShowCreateModal">
+            ➕ Create New Job
+        </button>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Queued</h5>
+                <h2>@_jobs.Count(j => j.Status == JobStatus.Queued)</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Running</h5>
+                <h2>@_jobs.Count(j => j.Status == JobStatus.Running)</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Completed</h5>
+                <h2>@_jobs.Count(j => j.Status == JobStatus.Completed)</h2>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">All Jobs</h5>
+
+                @if (_jobs.Any())
+                {
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Profile</th>
+                                <th>Platform</th>
+                                <th>Channel</th>
+                                <th>Status</th>
+                                <th>Progress</th>
+                                <th>Agent</th>
+                                <th>Created</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var job in _jobs)
+                            {
+                                <tr>
+                                    <td><strong>@job.Name</strong></td>
+                                    <td>@job.ProfileName</td>
+                                    <td>@job.Platform</td>
+                                    <td><span class="badge bg-info">@job.Channel</span></td>
+                                    <td>
+                                        @switch (job.Status)
+                                        {
+                                            case JobStatus.Queued:
+                                                <span class="badge bg-secondary">⏳ Queued</span>
+                                                break;
+                                            case JobStatus.Assigned:
+                                                <span class="badge bg-info">📋 Assigned</span>
+                                                break;
+                                            case JobStatus.Running:
+                                                <span class="badge bg-primary">▶️ Running</span>
+                                                break;
+                                            case JobStatus.Completed:
+                                                <span class="badge bg-success">✅ Completed</span>
+                                                break;
+                                            case JobStatus.Failed:
+                                                <span class="badge bg-danger">❌ Failed</span>
+                                                break;
+                                            case JobStatus.Cancelled:
+                                                <span class="badge bg-warning">🚫 Cancelled</span>
+                                                break;
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (job.Status == JobStatus.Running)
+                                        {
+                                            <div class="progress">
+                                                <div class="progress-bar" role="progressbar"
+                                                     style="width: @((job.Progress * 100).ToString("F0"))%"
+                                                     aria-valuenow="@((int)(job.Progress * 100))"
+                                                     aria-valuemin="0" aria-valuemax="100">
+                                                    @((job.Progress * 100).ToString("F0"))%
+                                                </div>
+                                            </div>
+                                        }
+                                        else if (job.Status == JobStatus.Completed)
+                                        {
+                                            <span class="text-success">100%</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">-</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (!string.IsNullOrEmpty(job.AssignedAgentId))
+                                        {
+                                            <code>@job.AssignedAgentId</code>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">-</span>
+                                        }
+                                    </td>
+                                    <td>@job.CreatedAt.ToString("g")</td>
+                                    <td>
+                                        @if (job.Status == JobStatus.Failed && !string.IsNullOrEmpty(job.ErrorMessage))
+                                        {
+                                            <button class="btn btn-sm btn-danger" @onclick="() => ShowError(job)">
+                                                View Error
+                                            </button>
+                                        }
+                                        @if (job.Status == JobStatus.Queued)
+                                        {
+                                            <button class="btn btn-sm btn-outline-danger" @onclick="() => DeleteJob(job.JobId)">
+                                                Delete
+                                            </button>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+                else
+                {
+                    <div class="alert alert-info">
+                        <strong>No jobs yet.</strong>
+                        <p>Create your first build job using the button above.</p>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (_showCreateModal)
+{
+    <div class="modal show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Create New Build Job</h5>
+                    <button type="button" class="btn-close" @onclick="CloseCreateModal"></button>
+                </div>
+                <div class="modal-body">
+                    <form>
+                        <div class="mb-3">
+                            <label class="form-label">Job Name</label>
+                            <input type="text" class="form-control" @bind="_newJob.Name"
+                                   placeholder="Android Dev Build" />
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Profile</label>
+                            <select class="form-select" @bind="_newJob.ProfileName">
+                                <option value="">Select profile...</option>
+                                <option value="Android Dev APK">Android Dev APK</option>
+                                <option value="Android Production APK">Android Production APK</option>
+                                <option value="Android AAB">Android AAB</option>
+                                <option value="iOS Development">iOS Development</option>
+                                <option value="iOS AppStore">iOS AppStore</option>
+                                <option value="Windows Dev">Windows Dev</option>
+                                <option value="Windows Release">Windows Release</option>
+                            </select>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Platform</label>
+                            <select class="form-select" @bind="_newJob.Platform">
+                                <option value="">Select platform...</option>
+                                <option value="Android">Android</option>
+                                <option value="iOS">iOS</option>
+                                <option value="Windows">Windows</option>
+                                <option value="WebGL">WebGL</option>
+                            </select>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Channel</label>
+                            <select class="form-select" @bind="_newJob.Channel">
+                                <option value="">Select channel...</option>
+                                <option value="Development">Development</option>
+                                <option value="Staging">Staging</option>
+                                <option value="Production">Production</option>
+                            </select>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseCreateModal">Cancel</button>
+                    <button type="button" class="btn btn-primary" @onclick="CreateJob">Create Job</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (_showErrorModal)
+{
+    <div class="modal show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Job Error</h5>
+                    <button type="button" class="btn-close" @onclick="CloseErrorModal"></button>
+                </div>
+                <div class="modal-body">
+                    <pre>@_errorMessage</pre>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseErrorModal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<Job> _jobs = new();
+    private bool _showCreateModal = false;
+    private bool _showErrorModal = false;
+    private string? _errorMessage;
+    private CreateJobDto _newJob = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadJobs();
+    }
+
+    private async Task LoadJobs()
+    {
+        _jobs = await DB.Jobs
+            .OrderByDescending(j => j.CreatedAt)
+            .ToListAsync();
+    }
+
+    private void ShowCreateModal()
+    {
+        _newJob = new CreateJobDto();
+        _showCreateModal = true;
+    }
+
+    private void CloseCreateModal()
+    {
+        _showCreateModal = false;
+        _newJob = new CreateJobDto();
+    }
+
+    private async Task CreateJob()
+    {
+        if (string.IsNullOrEmpty(_newJob.Name) || string.IsNullOrEmpty(_newJob.ProfileName)
+            || string.IsNullOrEmpty(_newJob.Platform) || string.IsNullOrEmpty(_newJob.Channel))
+        {
+            return;
+        }
+
+        var job = new Job
+        {
+            Name = _newJob.Name,
+            ProfileName = _newJob.ProfileName,
+            Platform = _newJob.Platform,
+            Channel = _newJob.Channel,
+            Status = JobStatus.Queued,
+            Progress = 0,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        DB.Jobs.Add(job);
+        await DB.SaveChangesAsync();
+
+        CloseCreateModal();
+        await LoadJobs();
+    }
+
+    private void ShowError(Job job)
+    {
+        _errorMessage = job.ErrorMessage;
+        _showErrorModal = true;
+    }
+
+    private void CloseErrorModal()
+    {
+        _showErrorModal = false;
+        _errorMessage = null;
+    }
+
+    private async Task DeleteJob(string jobId)
+    {
+        var job = await DB.Jobs.FirstOrDefaultAsync(j => j.JobId == jobId);
+        if (job != null)
+        {
+            DB.Jobs.Remove(job);
+            await DB.SaveChangesAsync();
+            await LoadJobs();
+        }
+    }
+
+    private class CreateJobDto
+    {
+        public string Name { get; set; } = "";
+        public string ProfileName { get; set; } = "";
+        public string Platform { get; set; } = "";
+        public string Channel { get; set; } = "";
+    }
+}
