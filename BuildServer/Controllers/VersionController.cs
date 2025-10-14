@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using BuildServer.Data;
+using BuildServer.Models;
+using System.Web;
 
 namespace BuildServer.Controllers;
 
@@ -9,135 +11,162 @@ namespace BuildServer.Controllers;
 public class VersionController : ControllerBase
 {
     private readonly BuildServerContext _db;
+    private readonly HttpClient _httpClient;
     private readonly ILogger<VersionController> _logger;
 
-    public VersionController(BuildServerContext db, ILogger<VersionController> logger)
+    public VersionController(BuildServerContext db, HttpClient httpClient, ILogger<VersionController> logger)
     {
         _db = db;
+        _httpClient = httpClient;
         _logger = logger;
     }
 
+    private string GetChannelId(string buildType)
+    {
+        return buildType switch
+        {
+            "EarlyAccess" => "com.ThreeDar.eggscape_early_access",
+            "LevelBuilder" => "com.ThreeDar.eggscape_early_dev",
+            _ => "com.ThreeDar.eggscape_early_dev"
+        };
+    }
+
     /// <summary>
-    /// Get the latest app version from completed builds
+    /// Get the latest bundle code from Portal Server
     /// </summary>
     [HttpGet("latest")]
-    public async Task<IActionResult> GetLatestVersion([FromQuery] string? platform = null)
+    public async Task<IActionResult> GetLatestVersion([FromQuery] string buildType = "LevelBuilder")
     {
         try
         {
-            var query = _db.Jobs
-                .Where(j => j.Status == Models.JobStatus.Completed && !string.IsNullOrEmpty(j.AppVersion));
-
-            if (!string.IsNullOrEmpty(platform))
+            var settings = await _db.GlobalSettings.FirstOrDefaultAsync();
+            if (settings == null)
             {
-                query = query.Where(j => j.Platform == platform);
+                return StatusCode(500, new { error = "Global settings not configured" });
             }
 
-            var latestJob = await query
-                .OrderByDescending(j => j.CompletedAt)
-                .FirstOrDefaultAsync();
+            var channelId = GetChannelId(buildType);
+            var url = $"{settings.PortalServerUrl}/bcv?v={HttpUtility.UrlEncode(channelId)}";
 
-            if (latestJob == null)
+            _logger.LogInformation("Fetching bundle code from: {Url}", url);
+
+            var response = await _httpClient.GetAsync(url);
+            response.EnsureSuccessStatusCode();
+
+            var bundleCodeStr = await response.Content.ReadAsStringAsync();
+
+            if (!int.TryParse(bundleCodeStr.Trim(), out var bundleCode))
             {
-                // No builds yet, return default
-                return Ok(new
-                {
-                    version = "1.0.0",
-                    bundleCode = 1,
-                    isDefault = true
-                });
+                _logger.LogError("Invalid bundle code received: {BundleCode}", bundleCodeStr);
+                return StatusCode(500, new { error = "Invalid bundle code from portal server" });
             }
 
             return Ok(new
             {
-                version = latestJob.AppVersion,
-                bundleCode = latestJob.BundleCode,
-                isDefault = false,
-                lastBuildDate = latestJob.CompletedAt
+                version = "1.0.0", // Version will be managed separately
+                bundleCode = bundleCode,
+                channelId = channelId,
+                buildType = buildType
             });
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to get latest version");
-            return StatusCode(500, new { error = "Failed to retrieve version" });
+            _logger.LogError(ex, "Failed to get bundle code from portal server");
+            return StatusCode(500, new { error = $"Failed to retrieve bundle code: {ex.Message}" });
         }
     }
 
     /// <summary>
-    /// Get the next app version (incremented)
+    /// Get the next bundle code (current + 1)
     /// </summary>
     [HttpGet("next")]
-    public async Task<IActionResult> GetNextVersion([FromQuery] string? platform = null)
+    public async Task<IActionResult> GetNextVersion([FromQuery] string buildType = "LevelBuilder")
     {
         try
         {
-            var latest = await GetLatestVersionInternal(platform);
+            var settings = await _db.GlobalSettings.FirstOrDefaultAsync();
+            if (settings == null)
+            {
+                return StatusCode(500, new { error = "Global settings not configured" });
+            }
 
-            // Increment bundle code
-            var nextBundleCode = latest.bundleCode + 1;
+            var channelId = GetChannelId(buildType);
+            var url = $"{settings.PortalServerUrl}/bcv?v={HttpUtility.UrlEncode(channelId)}";
 
-            // Parse and increment version
-            var nextVersion = IncrementVersion(latest.version);
+            var response = await _httpClient.GetAsync(url);
+            response.EnsureSuccessStatusCode();
+
+            var bundleCodeStr = await response.Content.ReadAsStringAsync();
+
+            if (!int.TryParse(bundleCodeStr.Trim(), out var currentBundleCode))
+            {
+                _logger.LogError("Invalid bundle code received: {BundleCode}", bundleCodeStr);
+                return StatusCode(500, new { error = "Invalid bundle code from portal server" });
+            }
+
+            var nextBundleCode = currentBundleCode + 1;
 
             return Ok(new
             {
-                version = nextVersion,
+                version = "1.0.0", // Placeholder for now
                 bundleCode = nextBundleCode,
-                previousVersion = latest.version,
-                previousBundleCode = latest.bundleCode
+                previousBundleCode = currentBundleCode,
+                channelId = channelId,
+                buildType = buildType
             });
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to get next version");
-            return StatusCode(500, new { error = "Failed to calculate next version" });
+            _logger.LogError(ex, "Failed to get next bundle code");
+            return StatusCode(500, new { error = $"Failed to calculate next bundle code: {ex.Message}" });
         }
     }
 
-    private async Task<(string version, int bundleCode)> GetLatestVersionInternal(string? platform)
-    {
-        var query = _db.Jobs
-            .Where(j => j.Status == Models.JobStatus.Completed && !string.IsNullOrEmpty(j.AppVersion));
-
-        if (!string.IsNullOrEmpty(platform))
-        {
-            query = query.Where(j => j.Platform == platform);
-        }
-
-        var latestJob = await query
-            .OrderByDescending(j => j.CompletedAt)
-            .FirstOrDefaultAsync();
-
-        if (latestJob == null)
-        {
-            return ("1.0.0", 1);
-        }
-
-        return (latestJob.AppVersion, latestJob.BundleCode);
-    }
-
-    private string IncrementVersion(string version)
+    /// <summary>
+    /// Update bundle code in Portal Server
+    /// </summary>
+    [HttpPost("update-bundle-code")]
+    public async Task<IActionResult> UpdateBundleCode([FromBody] UpdateBundleCodeRequest request)
     {
         try
         {
-            var parts = version.Split('.');
-            if (parts.Length != 3)
+            var settings = await _db.GlobalSettings.FirstOrDefaultAsync();
+            if (settings == null)
             {
-                return "1.0.1"; // Default increment
+                return StatusCode(500, new { error = "Global settings not configured" });
             }
 
-            var major = int.Parse(parts[0]);
-            var minor = int.Parse(parts[1]);
-            var patch = int.Parse(parts[2]);
+            var channelId = GetChannelId(request.BuildType);
 
-            // Increment patch version
-            patch++;
+            var url = $"{settings.PortalServerUrl}/bcv?" +
+                      $"v={HttpUtility.UrlEncode(channelId)}&" +
+                      $"s={HttpUtility.UrlEncode(settings.PortalServerSecret)}&" +
+                      $"bc={request.BundleCode}";
 
-            return $"{major}.{minor}.{patch}";
+            _logger.LogInformation("Updating bundle code to {BundleCode} for {ChannelId}", request.BundleCode, channelId);
+
+            var response = await _httpClient.GetAsync(url);
+            response.EnsureSuccessStatusCode();
+
+            var result = await response.Content.ReadAsStringAsync();
+
+            _logger.LogInformation("Bundle code updated successfully: {Result}", result);
+
+            return Ok(new
+            {
+                success = true,
+                bundleCode = request.BundleCode,
+                channelId = channelId,
+                buildType = request.BuildType,
+                message = result
+            });
         }
-        catch
+        catch (Exception ex)
         {
-            return "1.0.1";
+            _logger.LogError(ex, "Failed to update bundle code");
+            return StatusCode(500, new { error = $"Failed to update bundle code: {ex.Message}" });
         }
     }
 }
+
+public record UpdateBundleCodeRequest(string BuildType, int BundleCode);

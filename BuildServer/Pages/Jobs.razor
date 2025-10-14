@@ -610,8 +610,8 @@
     {
         try
         {
-            var platform = _newJob.Platform;
-            var response = await Http.GetFromJsonAsync<VersionResponse>($"/api/version/next?platform={platform}");
+            var buildType = _newJob.BuildType;
+            var response = await Http.GetFromJsonAsync<VersionResponse>($"/api/version/next?buildType={buildType}");
 
             if (response != null)
             {
