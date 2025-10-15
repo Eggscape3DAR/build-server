@@ -4,9 +4,11 @@
 @using BuildServer.Models
 @using System.Net.Http
 @using System.Net.Http.Json
+@using Microsoft.AspNetCore.WebUtilities
 @inject BuildServerContext DB
 @inject HttpClient Http
 @inject IConfiguration Config
+@inject NavigationManager Navigation
 
 <PageTitle>Jobs - Eggscape Build Server</PageTitle>
 
@@ -567,6 +569,14 @@
     {
         await LoadJobs();
         await LoadDefaultBranch();
+
+        // Check if URL has ?create=true parameter to auto-open modal
+        var uri = new Uri(Navigation.Uri);
+        var queryParams = QueryHelpers.ParseQuery(uri.Query);
+        if (queryParams.TryGetValue("create", out var createValue) && createValue == "true")
+        {
+            await ShowCreateModal();
+        }
     }
 
     private async Task LoadJobs()
