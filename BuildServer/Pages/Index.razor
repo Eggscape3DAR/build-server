@@ -3,12 +3,19 @@
 @using BuildServer.Data
 @using BuildServer.Models
 @inject BuildServerContext DB
+@inject NavigationManager Navigation
 
 <PageTitle>Build Server - Dashboard</PageTitle>
 
-<h1>🥚 Eggscape Build Server</h1>
-
-<p class="text-muted">🐣 Hatching builds since 2025 🐣</p>
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+        <h1>🥚 Eggscape Build Server</h1>
+        <p class="text-muted">🐣 Hatching builds since 2025 🐣</p>
+    </div>
+    <button class="btn btn-primary btn-lg" @onclick="@(() => Navigation.NavigateTo("/jobs"))">
+        QUEUE JOB
+    </button>
+</div>
 
 <div class="row mt-4">
     <div class="col-md-4">

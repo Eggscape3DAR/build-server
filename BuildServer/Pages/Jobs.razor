@@ -59,12 +59,12 @@
                         <thead>
                             <tr>
                                 <th>Name</th>
-                                <th>Platform</th>
+                                <th>Agent PC</th>
                                 <th>Build Type</th>
                                 <th>Branch</th>
                                 <th>Commit</th>
                                 <th>Submitted</th>
-                                <th>Agent</th>
+                                <th>Platform</th>
                                 <th>Status</th>
                                 <th>Progress</th>
                                 <th>Actions</th>
@@ -75,7 +75,24 @@
                             {
                                 <tr>
                                     <td><strong>@job.Name</strong></td>
-                                    <td><small>@job.Platform</small></td>
+                                    <td>
+                                        @if (!string.IsNullOrEmpty(job.AssignedAgentId))
+                                        {
+                                            var agent = _agents.FirstOrDefault(a => a.AgentId == job.AssignedAgentId);
+                                            if (agent != null)
+                                            {
+                                                <small>@agent.MachineName</small>
+                                            }
+                                            else
+                                            {
+                                                <small class="text-muted">Unknown</small>
+                                            }
+                                        }
+                                        else
+                                        {
+                                            <small class="text-muted">-</small>
+                                        }
+                                    </td>
                                     <td><span class="badge bg-info">@job.BuildType</span></td>
                                     <td>
                                         @if (!string.IsNullOrEmpty(job.GitBranch))
@@ -92,33 +109,15 @@
                                     <td>
                                         <small>@job.CreatedAt.ToString("g")</small>
                                     </td>
-                                    <td>
-                                        @if (!string.IsNullOrEmpty(job.AssignedAgentId))
-                                        {
-                                            var agent = _agents.FirstOrDefault(a => a.AgentId == job.AssignedAgentId);
-                                            if (agent != null)
-                                            {
-                                                <span class="badge bg-info" title="@agent.AgentId">
-                                                    🖥️ @agent.Name
-                                                </span>
-                                            }
-                                            else
-                                            {
-                                                <span class="badge bg-secondary" title="@job.AssignedAgentId">
-                                                    🖥️ Unknown Agent
-                                                </span>
-                                            }
-                                        }
-                                        else
-                                        {
-                                            <span class="text-muted small">Not assigned</span>
-                                        }
-                                    </td>
+                                    <td><small>@job.Platform</small></td>
                                     <td>
                                         @switch (job.Status)
                                         {
                                             case JobStatus.Queued:
                                                 <span class="badge bg-secondary">⏳ Queued</span>
+                                                break;
+                                            case JobStatus.Assigned:
+                                                <span class="badge bg-info">📋 Assigned</span>
                                                 break;
                                             case JobStatus.Running:
                                                 <span class="badge bg-primary">▶️ Running</span>
@@ -128,6 +127,9 @@
                                                 break;
                                             case JobStatus.Failed:
                                                 <span class="badge bg-danger">❌ Failed</span>
+                                                break;
+                                            case JobStatus.Cancelled:
+                                                <span class="badge bg-warning">🚫 Cancelled</span>
                                                 break;
                                         }
                                     </td>
@@ -155,6 +157,12 @@
                                         {
                                             <button class="btn btn-sm btn-warning" @onclick="() => CancelJob(job.JobId)">
                                                 Cancel
+                                            </button>
+                                        }
+                                        @if (job.Status == JobStatus.Failed || job.Status == JobStatus.Cancelled)
+                                        {
+                                            <button class="btn btn-sm btn-success" @onclick="() => RestartJob(job.JobId)">
+                                                Restart
                                             </button>
                                         }
                                     </td>
@@ -797,6 +805,27 @@
         catch (Exception ex)
         {
             Console.WriteLine($"Error cancelling job: {ex.Message}");
+        }
+    }
+
+    private async Task RestartJob(string jobId)
+    {
+        try
+        {
+            var response = await Http.PostAsync($"/api/jobs/{jobId}/restart", null);
+            if (response.IsSuccessStatusCode)
+            {
+                await LoadJobs();
+            }
+            else
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                Console.WriteLine($"Error restarting job: {errorContent}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error restarting job: {ex.Message}");
         }
     }
 

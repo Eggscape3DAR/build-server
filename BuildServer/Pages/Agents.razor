@@ -7,8 +7,15 @@
 
 <PageTitle>Agents - Eggscape Build Server</PageTitle>
 
-<h1>🖥️ Build Agents</h1>
-<p class="text-muted">🥚 Manage your egg-cellent build machines 🥚</p>
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+        <h1>🖥️ Build Agents</h1>
+        <p class="text-muted">🥚 Manage your egg-cellent build machines 🥚</p>
+    </div>
+    <button class="btn btn-primary btn-lg" @onclick="@(() => Navigation.NavigateTo("/jobs"))">
+        QUEUE JOB
+    </button>
+</div>
 
 <div class="row mt-4">
     <div class="col-12">

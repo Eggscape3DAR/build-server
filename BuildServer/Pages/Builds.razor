@@ -3,10 +3,18 @@
 @using BuildServer.Data
 @using BuildServer.Models
 @inject BuildServerContext DB
+@inject NavigationManager Navigation
 
 <PageTitle>Builds - Build Server</PageTitle>
 
-<h1>📊 Build History</h1>
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+        <h1>📊 Build History</h1>
+    </div>
+    <button class="btn btn-primary btn-lg" @onclick="@(() => Navigation.NavigateTo("/jobs"))">
+        QUEUE JOB
+    </button>
+</div>
 
 <div class="row mt-4">
     <div class="col-md-3">
