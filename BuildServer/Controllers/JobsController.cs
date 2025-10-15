@@ -40,6 +40,7 @@ public class JobsController : ControllerBase
             BuildType = request.BuildType,
             AppVersion = request.AppVersion,
             BundleCode = request.BundleCode,
+            UnityStartupTimeoutMinutes = request.UnityStartupTimeoutMinutes,
             Status = JobStatus.Queued,
             Progress = 0,
             CreatedAt = DateTime.UtcNow
@@ -269,6 +270,7 @@ public class JobsController : ControllerBase
             BuildType = originalJob.BuildType,
             AppVersion = originalJob.AppVersion,
             BundleCode = originalJob.BundleCode,
+            UnityStartupTimeoutMinutes = originalJob.UnityStartupTimeoutMinutes,
             Status = JobStatus.Queued,
             Progress = 0,
             CreatedAt = DateTime.UtcNow
@@ -310,7 +312,8 @@ public record CreateJobRequest(
     bool UploadToChannel = false,
     string BuildType = "LevelBuilder",
     string AppVersion = "1.0.0",
-    int BundleCode = 1
+    int BundleCode = 1,
+    int UnityStartupTimeoutMinutes = 45
 );
 public record UpdateProgressRequest(float Progress);
 public record CompleteJobRequest(string? BuildPath);

@@ -22,6 +22,7 @@ public class Job
     public string BuildType { get; set; } = "LevelBuilder"; // LevelBuilder or EarlyAccess
     public string AppVersion { get; set; } = "1.0.0";
     public int BundleCode { get; set; } = 1;
+    public int UnityStartupTimeoutMinutes { get; set; } = 45; // Timeout for Unity to start and respond
 
     public JobStatus Status { get; set; } = JobStatus.Queued;
     public float Progress { get; set; }

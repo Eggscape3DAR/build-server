@@ -10,15 +10,14 @@
 
 <PageTitle>Jobs - Eggscape Build Server</PageTitle>
 
-<h1>📦 Build Jobs</h1>
-<p class="text-muted">🐣 Queue and hatch your Eggscape builds 🐣</p>
-
-<div class="row mt-4">
-    <div class="col-12">
-        <button class="btn btn-primary mb-3" @onclick="ShowCreateModal">
-            ➕ Create New Job
-        </button>
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+        <h1>📦 Build Jobs</h1>
+        <p class="text-muted">🐣 Queue and hatch your Eggscape builds 🐣</p>
     </div>
+    <button class="btn btn-primary btn-lg" @onclick="ShowCreateModal">
+        QUEUE JOB
+    </button>
 </div>
 
 <div class="row">
@@ -152,7 +151,7 @@
                                                 Delete
                                             </button>
                                         }
-                                        @if (job.Status == JobStatus.Running || job.Status == JobStatus.Failed || job.Status == JobStatus.Assigned)
+                                        @if (job.Status == JobStatus.Running || job.Status == JobStatus.Assigned)
                                         {
                                             <button class="btn btn-sm btn-warning" @onclick="() => CancelJob(job.JobId)">
                                                 Cancel
@@ -291,6 +290,14 @@
                                 <div class="mb-3">
                                     <label class="form-label">App Version</label>
                                     <input type="text" class="form-control" @bind="_newJob.AppVersion" placeholder="1.0.0" />
+                                </div>
+
+                                <div class="mb-3">
+                                    <label class="form-label">Unity Startup Timeout (minutes)</label>
+                                    <input type="number" class="form-control" @bind="_newJob.UnityStartupTimeoutMinutes" min="1" max="120" />
+                                    <small class="form-text text-muted">
+                                        Time to wait for Unity to open and respond. Default: 45 minutes
+                                    </small>
                                 </div>
 
                                 <hr />
@@ -734,6 +741,7 @@
             BuildType = _newJob.BuildType,
             AppVersion = _newJob.AppVersion,
             BundleCode = _newJob.BundleCode,
+            UnityStartupTimeoutMinutes = _newJob.UnityStartupTimeoutMinutes,
             AutoAssign = _newJob.AutoAssign,
             AssignedAgentId = _newJob.AutoAssign ? null : _newJob.ManualAgentId,
             Status = JobStatus.Queued,
@@ -775,15 +783,15 @@
     {
         try
         {
-            var response = await Http.PostAsync($"/api/Jobs/{jobId}/cancel", null);
+            var response = await Http.PostAsync($"/api/jobs/{jobId}/cancel", null);
             if (response.IsSuccessStatusCode)
             {
                 await LoadJobs();
             }
             else
             {
-                var error = await response.Content.ReadAsStringAsync();
-                Console.WriteLine($"Failed to cancel job: {error}");
+                var errorContent = await response.Content.ReadAsStringAsync();
+                Console.WriteLine($"Error cancelling job: {errorContent}");
             }
         }
         catch (Exception ex)
@@ -809,6 +817,7 @@
         public string BuildType { get; set; } = "LevelBuilder";
         public string AppVersion { get; set; } = "1.0.0";
         public int BundleCode { get; set; } = 1;
+        public int UnityStartupTimeoutMinutes { get; set; } = 45;
         public bool AutoAssign { get; set; } = true;
         public string? ManualAgentId { get; set; }
     }
