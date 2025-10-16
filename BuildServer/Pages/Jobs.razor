@@ -149,12 +149,6 @@
                                         <button class="btn btn-sm btn-info" @onclick="() => ShowJobDetails(job)">
                                             Details
                                         </button>
-                                        @if (job.Status == JobStatus.Queued)
-                                        {
-                                            <button class="btn btn-sm btn-outline-danger" @onclick="() => DeleteJob(job.JobId)">
-                                                Delete
-                                            </button>
-                                        }
                                         @if (job.Status == JobStatus.Running || job.Status == JobStatus.Assigned)
                                         {
                                             <button class="btn btn-sm btn-warning" @onclick="() => CancelJob(job.JobId)">
@@ -167,6 +161,9 @@
                                                 Restart
                                             </button>
                                         }
+                                        <button class="btn btn-sm btn-danger" @onclick="() => DeleteJob(job.JobId)">
+                                            Delete
+                                        </button>
                                     </td>
                                 </tr>
                             }
